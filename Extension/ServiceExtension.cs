@@ -33,7 +33,7 @@ namespace backend.Extension
         {
             Console.WriteLine(configuration.GetConnectionString("DefaultConnection"));
             service.AddDbContext<AppDbContext>(options =>
-            options.UseMySQL(configuration.GetConnectionString("DefaultConnection")));
+            options.UseMySQL(configuration.GetConnectionString("DefaultConnection")!));
         }
         private static IServiceCollection AddCorsConfiguration(this IServiceCollection services)
         {

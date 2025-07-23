@@ -34,6 +34,7 @@ namespace backend.Dto
         public required string AccountNumber { get; set; }
         public required string BankName { get; set; }
         public required string ParentId { get; set; }
+        public string? Position { get; set; } 
     }
     public class DistributorLoginResponse
     {
@@ -45,6 +46,7 @@ namespace backend.Dto
 {
     public string Id { get; set; } = null!;
     public string Name { get; set; } = null!;
+    public string? Position { get; set; }
     public List<DistributorTreeDto> Children { get; set; } = new();
 }
 

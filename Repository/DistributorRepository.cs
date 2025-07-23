@@ -45,11 +45,11 @@ namespace backend.Repository
         public async Task<bool> SignUpDistributorAsync(User user)
         {
             // Assign the left or right position based on current children
-            // var availablePosition = await GetAvailablePosition(user.ParentId!);
-            // if (availablePosition == null)
-            //     throw new InvalidOperationException("Parent already has two children");
+            var availablePosition = await GetAvailablePosition(user.ParentId!);
+            if (availablePosition == null)
+                throw new InvalidOperationException("Parent already has two children");
 
-            // user.Position = availablePosition.Value;
+            user.Position = availablePosition.Value;
 
             // Validate placement
             var isValidPlacement = await ValidatePlacement(user.ReferalId!, user.ParentId!);
@@ -176,6 +176,7 @@ namespace backend.Repository
             {
                 Id = user.Id,
                 Name = user.FullName,
+                Position = user.Position.ToString(),
                 Children = new List<DistributorTreeDto>()
             };
 
@@ -187,21 +188,21 @@ namespace backend.Repository
 
             return dto;
         }
-        // public async Task<NodePosition?> GetAvailablePosition(string parentId)
-        // {
-        //     var children = await _context.Users
-        //         .Where(u => u.ParentId == parentId)
-        //         .ToListAsync();
+        public async Task<NodePosition?> GetAvailablePosition(string parentId)
+        {
+            var children = await _context.Users
+                .Where(u => u.ParentId == parentId)
+                .ToListAsync();
 
-        //     bool hasLeft = children.Any(c => c.Position == NodePosition.Left);
-        //     bool hasRight = children.Any(c => c.Position == NodePosition.Right);
+            bool hasLeft = children.Any(c => c.Position == NodePosition.Left);
+            bool hasRight = children.Any(c => c.Position == NodePosition.Right);
 
-        //     if (!hasLeft) return NodePosition.Left;
-        //     if (!hasRight) return NodePosition.Right;
+            if (!hasLeft) return NodePosition.Left;
+            if (!hasRight) return NodePosition.Right;
 
-        //     // No available position
-        //     return null;
-        // }
+            // No available position
+            return null;
+        }
         public async Task<List<User>> GetPeopleIReferredAsync(string myUserId)
         {
             return await _context.Users

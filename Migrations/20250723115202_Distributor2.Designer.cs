@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using backend.Data;
 
@@ -10,48 +11,16 @@ using backend.Data;
 namespace backend.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250723115202_Distributor2")]
+    partial class Distributor2
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
                 .HasAnnotation("ProductVersion", "8.0.8")
                 .HasAnnotation("Relational:MaxIdentifierLength", 64);
-
-            modelBuilder.Entity("CommissionPayout", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    b.Property<decimal>("Amount")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<DateTime>("PayoutDate")
-                        .HasColumnType("datetime(6)");
-
-                    b.Property<string>("Remarks")
-                        .HasMaxLength(255)
-                        .HasColumnType("varchar(255)");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(32)
-                        .HasColumnType("varchar(32)")
-                        .HasDefaultValue("Pending");
-
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasColumnType("varchar(255)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("UserId");
-
-                    b.ToTable("CommissionPayouts");
-                });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole", b =>
                 {
@@ -233,43 +202,6 @@ namespace backend.Migrations
                     b.ToTable("order_items", (string)null);
                 });
 
-            modelBuilder.Entity("WithdrawalRequest", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    b.Property<decimal>("Amount")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<DateTime?>("ProcessedDate")
-                        .HasColumnType("datetime(6)");
-
-                    b.Property<string>("Remarks")
-                        .HasMaxLength(255)
-                        .HasColumnType("varchar(255)");
-
-                    b.Property<DateTime>("RequestDate")
-                        .HasColumnType("datetime(6)");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(32)
-                        .HasColumnType("varchar(32)")
-                        .HasDefaultValue("Pending");
-
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasColumnType("varchar(255)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("UserId");
-
-                    b.ToTable("WithdrawalRequests");
-                });
-
             modelBuilder.Entity("backend.Models.Cart", b =>
                 {
                     b.Property<int>("Id")
@@ -407,9 +339,6 @@ namespace backend.Migrations
                         .IsConcurrencyToken()
                         .HasColumnType("longtext");
 
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime(6)");
-
                     b.Property<string>("DOB")
                         .HasColumnType("longtext");
 
@@ -479,17 +408,6 @@ namespace backend.Migrations
                         .HasDatabaseName("UserNameIndex");
 
                     b.ToTable("AspNetUsers", (string)null);
-                });
-
-            modelBuilder.Entity("CommissionPayout", b =>
-                {
-                    b.HasOne("backend.Models.User", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
@@ -572,17 +490,6 @@ namespace backend.Migrations
                     b.Navigation("Order");
 
                     b.Navigation("Product");
-                });
-
-            modelBuilder.Entity("WithdrawalRequest", b =>
-                {
-                    b.HasOne("backend.Models.User", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("backend.Models.CartItem", b =>

@@ -4,11 +4,11 @@ using Microsoft.AspNetCore.Identity;
 
 namespace backend.Models
 {
-    //     public enum NodePosition
-    // {
-    //     Left,
-    //     Right
-    // }
+        public enum NodePosition
+    {
+        Left,
+        Right
+    }
     public class User : IdentityUser
     {
         public required string Address { get; set; }
@@ -22,7 +22,8 @@ namespace backend.Models
         public string? ReferalId { get; set; }
         public double CommisionAmmount { get; set; } = 0.0;
         public double TotalWallet { get; set; } = 0.0;
-        // public NodePosition? Position { get; set; } // Nullable: root has no position
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public NodePosition? Position { get; set; } // Nullable: root has no position
     }
     
 }
