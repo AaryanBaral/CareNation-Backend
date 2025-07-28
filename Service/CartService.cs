@@ -53,4 +53,8 @@ public class CartService : ICartService
     {
         await _repo.ClearCartAsync(userId);
     }
+        public async Task UpdateItemQuantityAsync(string userId, int productId, int quantity)
+    {
+        await _repo.UpdateItemQuantityAsync(userId, productId, quantity);
+    }
 }

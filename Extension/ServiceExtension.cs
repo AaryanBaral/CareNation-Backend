@@ -60,6 +60,8 @@ namespace backend.Extension
             service.AddScoped<IProductImageRepository, ProductImageRepository>();
             service.AddScoped<ICartRepository, CartRepository>();
             service.AddScoped<IDistributorRepository, DistributorRepository>();
+            service.AddScoped<IReportRepository, ReportRepository>();
+            service.AddScoped<ICommissionPayoutRepository, CommissionPayoutRepository>();
         }
         public static void AddServices(this IServiceCollection service)
         {
@@ -72,6 +74,8 @@ namespace backend.Extension
             service.AddScoped<IJwtService, JwtService>();
             service.AddScoped<ICartService, CartService>();
             service.AddScoped<IDistributorService, DistributorService>();
+            service.AddScoped<IReportService, ReportService>();
+            service.AddScoped<ICommissionPayoutService, CommissionPayoutService>();
 
         }
 

@@ -11,8 +11,9 @@ public interface IDistributorRepository
     Task<List<User>> GetAllDistributorsAsync();
     Task<bool> UpdateDistributorAsync(User user);
     Task<bool> DeleteDistributorAsync(string id);
-    Task Addcommitsion(double commision, string userId);
+    Task Addcommitsion(decimal commision, string userId);
     Task<DistributorTreeDto?> GetUserTreeAsync(string userId);
     Task<List<User>> GetPeopleIReferredAsync(string myUserId);
     Task<List<User>> GetMyUplineAsync(string myUserId);
+    Task ProcessCommissionOnSaleAsync(string userId, decimal saleAmount);
     }

@@ -1,6 +1,7 @@
 // OrderItemRepository.cs
 using backend.Data;
 using backend.Interface.Repository;
+using backend.Models;
 using Microsoft.EntityFrameworkCore;
 namespace backend.Repository;
 

@@ -88,6 +88,7 @@ public async Task<IActionResult> GetFullTransactionalReport(
     [FromQuery] DateTime? from = null,
     [FromQuery] DateTime? to = null)
 {
+    
     var result = await _service.GetFullTransactionalReportAsync(userId, from, to);
     return Ok(result);
 }

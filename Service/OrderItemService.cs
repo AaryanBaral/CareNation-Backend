@@ -1,7 +1,6 @@
 using backend.Dto;
 using backend.Interface.Repository;
 using backend.Interface.Service;
-using backend.Models;
 
 namespace backend.Service
 {
@@ -18,14 +17,14 @@ namespace backend.Service
         {
             var items = await _repository.GetOrderItemsByOrderIdAsync(orderId);
 
-            return items.Select(item => new OrderItemReadDto
+            return [.. items.Select(item => new OrderItemReadDto
             {
                 Id = item.Id,
                 ProductId = item.ProductId,
                 OrderId = item.OrderId,
                 Quantity = item.Quantity,
                 Price = item.Price
-            }).ToList();
+            })];
         }
     }
 }

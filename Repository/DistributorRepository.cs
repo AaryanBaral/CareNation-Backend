@@ -12,13 +12,15 @@ namespace backend.Repository
     {
         private readonly UserManager<User> _userManager;
         private readonly AppDbContext _context;
+        private readonly ICommissionPayoutRepository _commissionPayoutRepository;
         private readonly RoleManager<IdentityRole> _roleManager;
 
-        public DistributorRepository(UserManager<User> userManager, RoleManager<IdentityRole> roleManager, AppDbContext context)
+        public DistributorRepository(UserManager<User> userManager, RoleManager<IdentityRole> roleManager, AppDbContext context, ICommissionPayoutRepository commissionPayoutRepository)
         {
             _userManager = userManager;
             _context = context;
             _roleManager = roleManager;
+            _commissionPayoutRepository = commissionPayoutRepository;
         }
 
         public async Task<bool> CanBecomeDistributorAsync(string userId)
@@ -117,7 +119,7 @@ namespace backend.Repository
             var deleteResult = await _userManager.DeleteAsync(user);
             return deleteResult.Succeeded;
         }
-        public async Task Addcommitsion(double commision, string userId)
+        public async Task Addcommitsion(decimal commision, string userId)
         {
             var user = await GetDistributorByIdAsync(userId) ?? throw new KeyNotFoundException("Invalid id");
             user.CommisionAmmount += commision;
@@ -225,6 +227,59 @@ namespace backend.Repository
 
             return upline;
         }
+
+        public async Task ProcessCommissionOnSaleAsync(string userId, decimal saleAmount)
+        {
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == userId);
+            if (user == null) throw new KeyNotFoundException("User not found");
+
+            var child = user;
+            while (!string.IsNullOrEmpty(child.ParentId))
+            {
+                var parent = await _context.Users.FirstOrDefaultAsync(u => u.Id == child.ParentId);
+                if (parent == null) break;
+
+                // Add amount to correct wallet
+                if (child.Position == NodePosition.Left)
+                    parent.LeftWallet += saleAmount;
+                else if (child.Position == NodePosition.Right)
+                    parent.RightWallet += saleAmount;
+
+
+                /*
+                Need to add a flush condition bases on max comission allowed per day
+                Add commsion amount based on the level of distributor 
+                */
+
+
+                // Check if commission is possible
+                var minWallet = Math.Min(parent.LeftWallet, parent.RightWallet);
+                if (minWallet >= 5000)
+                {
+                    int matchCount = (int)(minWallet / 5000);
+                    decimal commission = matchCount * 600;
+
+                    var comissionPayout = new CommissionPayout()
+                    {
+                        UserId = parent.Id,
+                        PayoutDate = DateTime.UtcNow,
+                        Amount = commission,
+                        Remarks = $" comission added for sale made by {userId}",
+
+                    };
+                    await _commissionPayoutRepository.AddAsync(comissionPayout);
+
+                    parent.LeftWallet -= matchCount * 5000;
+                    parent.RightWallet -= matchCount * 5000;
+                    parent.CommisionAmmount += commission;
+                }
+
+
+                child = parent;
+            }
+            await _context.SaveChangesAsync(); 
+        }
+
 
 
     }

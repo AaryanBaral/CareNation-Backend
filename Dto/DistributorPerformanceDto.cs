@@ -7,5 +7,5 @@ public class DistributorPerformanceDto
     public int TotalDownline { get; set; }
     public decimal PersonalSales { get; set; }
     public decimal TeamSales { get; set; }
-    public double TotalCommission { get; set; }
+    public decimal TotalCommission { get; set; }
 }

@@ -80,7 +80,12 @@ public class ReportRepository : IReportRepository
 
         if (period == "month")
         {
-            return await query
+            // Pull only what you need, then group in C#.
+            var data = await query
+                .Select(o => new { o.OrderDate, o.TotalAmount })
+                .ToListAsync(); // Fetch to memory
+
+            return data
                 .GroupBy(o => new { o.OrderDate.Year, o.OrderDate.Month })
                 .Select(g => new SalesByTimeDto
                 {
@@ -88,19 +93,22 @@ public class ReportRepository : IReportRepository
                     TotalSales = g.Sum(x => x.TotalAmount)
                 })
                 .OrderBy(x => x.Date)
-                .ToListAsync();
+                .ToList();
         }
         else // day
         {
-            return await query
+            var data = await query
+                .Select(o => new { o.OrderDate, o.TotalAmount })
+                .ToListAsync(); // Fetch to memory
+
+            return [.. data
                 .GroupBy(o => o.OrderDate.Date)
                 .Select(g => new SalesByTimeDto
                 {
                     Date = g.Key,
                     TotalSales = g.Sum(x => x.TotalAmount)
                 })
-                .OrderBy(x => x.Date)
-                .ToListAsync();
+                .OrderBy(x => x.Date)];
         }
 
     }
@@ -145,7 +153,7 @@ public class ReportRepository : IReportRepository
         if (from != null) orders = orders.Where(o => o.OrderDate >= from.Value);
         if (to != null) orders = orders.Where(o => o.OrderDate <= to.Value);
 
-        var totalSales = await orders.SumAsync(o => (decimal?)o.TotalAmount) ?? 0m;
+        var totalSales = await orders.SumAsync(o => (decimal?)o.TotalAmount) ?? 0;
 
         return new PersonalEarningsDto
         {
@@ -182,7 +190,7 @@ public class ReportRepository : IReportRepository
                 .Where(o => o.UserId == user.Id)
                 .Where(o => !from.HasValue || o.OrderDate >= from)
                 .Where(o => !to.HasValue || o.OrderDate <= to)
-                .SumAsync(o => (decimal?)o.TotalAmount) ?? 0m;
+                .SumAsync(o => (decimal?)o.TotalAmount) ?? 0;
 
             // Team sales: sales from all downline (direct and indirect)
             var downlineIds = new List<string>();
@@ -201,7 +209,7 @@ public class ReportRepository : IReportRepository
                 .Where(o => downlineIds.Contains(o.UserId))
                 .Where(o => !from.HasValue || o.OrderDate >= from)
                 .Where(o => !to.HasValue || o.OrderDate <= to)
-                .SumAsync(o => (decimal?)o.TotalAmount) ?? 0m;
+                .SumAsync(o => (decimal?)o.TotalAmount) ?? 0;
 
             report.Add(new DistributorPerformanceDto
             {
@@ -459,13 +467,6 @@ public class ReportRepository : IReportRepository
 
         return allTransactions;
     }
-
-
-
-
-
-
-
 
 
 

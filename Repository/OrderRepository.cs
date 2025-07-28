@@ -1,6 +1,7 @@
 // OrderRepository.cs
 using backend.Data;
 using backend.Interface.Repository;
+using backend.Models;
 
 public class OrderRepository : IOrderRepository
 {
@@ -10,6 +11,7 @@ public class OrderRepository : IOrderRepository
     public async Task CreateOrderAsync(Order order)
     {
         _context.Orders.Add(order);
+        
         await _context.SaveChangesAsync();
     }
 }

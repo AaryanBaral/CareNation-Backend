@@ -4,7 +4,7 @@ public class PersonalEarningsDto
     public string DistributorName { get; set; } = "";
     public string DistributorEmail { get; set; } = "";
     public decimal TotalPersonalSales { get; set; }
-    public double TotalCommission { get; set; }
-    public double TotalWallet { get; set; }
+    public decimal TotalCommission { get; set; }
+    public decimal TotalWallet { get; set; }
     
 }

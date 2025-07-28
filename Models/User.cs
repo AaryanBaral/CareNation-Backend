@@ -20,8 +20,10 @@ namespace backend.Models
         public string? BankName { get; set; }
         public string? ParentId { get; set; }
         public string? ReferalId { get; set; }
-        public double CommisionAmmount { get; set; } = 0.0;
-        public double TotalWallet { get; set; } = 0.0;
+        public decimal CommisionAmmount { get; set; } = 0;
+        public decimal LeftWallet { get; set; } = 0;
+        public decimal RightWallet { get; set; } = 0;
+        public decimal TotalWallet { get; set; } = 0;
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public NodePosition? Position { get; set; } // Nullable: root has no position
     }

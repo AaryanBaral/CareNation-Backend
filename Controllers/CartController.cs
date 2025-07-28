@@ -28,7 +28,7 @@ public class CartController : ControllerBase
 
     [HttpPost("add")]
     public async Task<ActionResult<SuccessResponseDto
-    <string>>> AddToCart( [FromBody] CartItemDto item)
+    <string>>> AddToCart([FromBody] CartItemDto item)
     {
         string userId = (User.FindFirst("Id")?.Value) ?? throw new UnauthorizedAccessException("Please login to view this");
         await _service.AddToCartAsync(userId, item);
@@ -36,7 +36,7 @@ public class CartController : ControllerBase
     }
 
     [HttpDelete("{productId}")]
-    public async Task<ActionResult<SuccessResponseDto<string>>> RemoveItem( int productId)
+    public async Task<ActionResult<SuccessResponseDto<string>>> RemoveItem(int productId)
     {
         string userId = (User.FindFirst("Id")?.Value) ?? throw new UnauthorizedAccessException("Please login to view this");
         await _service.RemoveFromCartAsync(userId, productId);
@@ -50,4 +50,14 @@ public class CartController : ControllerBase
         await _service.ClearCartAsync(userId);
         return Ok(new SuccessResponseDto<string> { Data = "Cart cleared" });
     }
+    [HttpPut("update-quantity")]
+public async Task<ActionResult<SuccessResponseDto<string>>> UpdateItemQuantity([FromBody] UpdateQuantityDto dto)
+{
+    string userId = (User.FindFirst("Id")?.Value) ?? throw new UnauthorizedAccessException("Please login to update cart");
+
+    await _service.UpdateItemQuantityAsync(userId, dto.ProductId, dto.Quantity);
+
+    return Ok(new SuccessResponseDto<string> { Data = "Item quantity updated" });
+}
+
 }

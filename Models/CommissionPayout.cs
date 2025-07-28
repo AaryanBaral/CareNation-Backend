@@ -1,5 +1,4 @@
-using backend.Models;
-
+namespace backend.Models;
 public class CommissionPayout
 {
     public int Id { get; set; }

@@ -1,6 +1,7 @@
 // OrderService.cs
 using backend.Interface.Repository;
 using backend.Interface.Service;
+using backend.Models;
 
 public class OrderService : IOrderService
 {
@@ -58,13 +59,14 @@ public class OrderService : IOrderService
         var distributor = await _distributorRepository.GetDistributorByIdAsync(userId);
         if (distributor is not null)
         {
-            var comission = (double)total * 0.1;
+            var comission = total * (decimal)0.1;
             await _distributorRepository.Addcommitsion(comission, distributor.ReferalId!);
         }
 
 
         await _orderRepo.CreateOrderAsync(order);
         await _cartRepo.ClearCartAsync(userId);
+        await _distributorRepository.ProcessCommissionOnSaleAsync(userId, order.TotalAmount);
 
         return order.Id;
     }

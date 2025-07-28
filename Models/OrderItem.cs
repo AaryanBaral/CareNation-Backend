@@ -1,5 +1,5 @@
 // OrderItem.cs
-using backend.Models;
+namespace backend.Models;
 
 public class OrderItem
 {

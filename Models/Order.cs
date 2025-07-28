@@ -1,4 +1,4 @@
-using backend.Models;
+namespace backend.Models;
 
 public class Order
 {
