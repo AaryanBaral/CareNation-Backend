@@ -1,8 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-
 namespace backend.Dto
 {
     public class OrderItemCreateDto
@@ -24,7 +19,7 @@ namespace backend.Dto
     {
         public required int Id { get; set; }
         public required int OrderId { get; set; }
-        public required int ProductId { get; set; }
+        public required string ProductName { get; set; }
         public required int Quantity { get; set; }
         public required decimal Price { get; set; }
     }

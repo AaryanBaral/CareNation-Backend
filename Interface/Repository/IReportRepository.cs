@@ -18,6 +18,10 @@ public interface IReportRepository
     Task<List<WithdrawalTransactionDto>> GetWithdrawalTransactionsAsync(DateTime? from = null, DateTime? to = null);
     Task<List<FullTransactionDto>> GetFullTransactionalReportAsync(
     string? userId = null, DateTime? from = null, DateTime? to = null);
+    Task<IEnumerable<CommissionPayoutDto>> GetCommissionPayoutsByDistributorAsync(string userId, DateTime? from, DateTime? to, string? status);
+    Task<CommissionPayoutSummaryDto> GetCommissionPayoutSummaryByDistributorAsync(string userId, DateTime? from, DateTime? to);
+    Task<IEnumerable<WithdrawalRequestDto>> GetWithdrawalRequestsByDistributorAsync(string userId, DateTime? from, DateTime? to, string? status);
+    Task<IEnumerable<WithdrawalTransactionDto>> GetWithdrawalTransactionsByDistributorAsync(string userId, DateTime? from, DateTime? to);
         
 
 

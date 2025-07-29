@@ -35,6 +35,8 @@ namespace backend.Dto
         public required string BankName { get; set; }
         public required string ParentId { get; set; }
         public string? Position { get; set; } 
+        public required decimal LeftWallet { get; set; }
+        public required decimal RightWallet { get; set; }
     }
     public class DistributorLoginResponse
     {

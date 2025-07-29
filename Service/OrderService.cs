@@ -1,6 +1,7 @@
-// OrderService.cs
+using backend.Dto;
 using backend.Interface.Repository;
 using backend.Interface.Service;
+using backend.Mapper;
 using backend.Models;
 
 public class OrderService : IOrderService
@@ -69,5 +70,17 @@ public class OrderService : IOrderService
         await _distributorRepository.ProcessCommissionOnSaleAsync(userId, order.TotalAmount);
 
         return order.Id;
+    }
+        public async Task<List<OrderReadDto>> SearchOrdersAsync(
+        string? userId = null,
+        OrderStatus status = OrderStatus.Pending,
+        bool highestSaleOnly = false,
+        DateTime? from = null,
+        DateTime? to = null,
+        int skip = 0,
+        int take = 20)
+    {
+        var orders = await _orderRepo.SearchOrdersAsync(userId, status, highestSaleOnly, from, to, skip, take);
+        return [.. orders.Select(o => o.ToDto())];
     }
 }

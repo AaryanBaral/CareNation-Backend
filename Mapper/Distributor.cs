@@ -35,7 +35,9 @@ namespace backend.Mapper
                 AccountNumber = user.AccountNumber!,
                 BankName = user.BankName!,
                 ParentId = user.ParentId!,
-                Position = user.Position.ToString()
+                Position = user.Position.ToString()?? null,
+                RightWallet = user.RightWallet,
+                LeftWallet = user.LeftWallet
             };
         }
     }

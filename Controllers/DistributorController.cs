@@ -49,8 +49,8 @@ namespace backend.Controllers
         }
 
         [Authorize(AuthenticationSchemes = "Bearer")]
-        [HttpGet("/individual")]
-        public async Task<IActionResult> GetDistributorById(string id)
+        [HttpGet("individual")]
+        public async Task<IActionResult> GetDistributorById()
         {
             var userId = User.FindFirst("Id")?.Value
                 ?? throw new UnauthorizedAccessException("Login required");
@@ -68,7 +68,7 @@ namespace backend.Controllers
             return Ok(distributors);
         }
         [Authorize(AuthenticationSchemes = "Bearer")]
-        [HttpPut("/update")]
+        [HttpPut("update")]
         public async Task<IActionResult> UpdateDistributor([FromBody] DistributorSignUpDto dto)
         {
             var userId = User.FindFirst("Id")?.Value

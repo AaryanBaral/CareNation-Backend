@@ -34,7 +34,7 @@ namespace backend.Mapper
             {
                 Id = item.Id,
                 OrderId = item.OrderId,
-                ProductId = item.ProductId,
+                ProductName = item.Product.Title,
                 Quantity = item.Quantity,
                 Price = item.Price
             };

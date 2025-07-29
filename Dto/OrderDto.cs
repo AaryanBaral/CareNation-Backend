@@ -18,8 +18,9 @@ namespace backend.Dto
         public int Id { get; set; }
         public string UserId { get; set; } = string.Empty;
         public DateTime OrderDate { get; set; }
-        public List<OrderItemDto> Items { get; set; } = new();
         public decimal TotalAmount { get; set; }
+        public string Status { get; set; } = string.Empty;
+        public List<OrderItemReadDto> Items { get; set; } = new();
     }
     public class OrderItemDto
     {
