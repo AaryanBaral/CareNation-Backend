@@ -19,6 +19,38 @@ namespace backend.Migrations
                 .HasAnnotation("ProductVersion", "8.0.8")
                 .HasAnnotation("Relational:MaxIdentifierLength", 64);
 
+            modelBuilder.Entity("FundContribution", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("ContributionDate")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("Remarks")
+                        .HasMaxLength(512)
+                        .HasColumnType("varchar(512)");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("int");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("varchar(255)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "ContributionDate");
+
+                    b.HasIndex("UserId", "Type", "ContributionDate");
+
+                    b.ToTable("FundContributions", (string)null);
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole", b =>
                 {
                     b.Property<string>("Id")
@@ -147,6 +179,132 @@ namespace backend.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("RewardPayout", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("CarFundAmount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("decimal(18,2)")
+                        .HasDefaultValue(0m);
+
+                    b.Property<decimal>("HouseFundAmount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("decimal(18,2)")
+                        .HasDefaultValue(0m);
+
+                    b.Property<decimal>("MilestoneAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("PayoutDate")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("RankLabel")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<string>("RewardItem")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("varchar(128)");
+
+                    b.Property<decimal>("RoyaltyAmount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("decimal(18,2)")
+                        .HasDefaultValue(0m);
+
+                    b.Property<decimal>("TravelFundAmount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("decimal(18,2)")
+                        .HasDefaultValue(0m);
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("varchar(255)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "MilestoneAmount")
+                        .HasDatabaseName("IX_Reward_MilestoneOnce");
+
+                    b.HasIndex("UserId", "PayoutDate");
+
+                    b.ToTable("RewardPayouts", (string)null);
+                });
+
+            modelBuilder.Entity("SystemCounter", b =>
+                {
+                    b.Property<string>("Name")
+                        .HasColumnType("varchar(255)");
+
+                    b.Property<long>("NextValue")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Name");
+
+                    b.ToTable("SystemCounters");
+                });
+
+            modelBuilder.Entity("TeamSalesProgress", b =>
+                {
+                    b.Property<string>("UserId")
+                        .HasColumnType("varchar(255)");
+
+                    b.Property<decimal>("LeftTeamSales")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("decimal(18,2)")
+                        .HasDefaultValue(0m);
+
+                    b.Property<decimal>("MatchedVolumeConsumed")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("decimal(18,2)")
+                        .HasDefaultValue(0m);
+
+                    b.Property<decimal>("RightTeamSales")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("decimal(18,2)")
+                        .HasDefaultValue(0m);
+
+                    b.HasKey("UserId");
+
+                    b.ToTable("TeamSalesProgress", (string)null);
+                });
+
+            modelBuilder.Entity("backend.Models.BalanceTransfer", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("ReceiverId")
+                        .IsRequired()
+                        .HasColumnType("varchar(255)");
+
+                    b.Property<string>("Remarks")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("SenderId")
+                        .IsRequired()
+                        .HasColumnType("varchar(255)");
+
+                    b.Property<DateTime>("TransferDate")
+                        .HasColumnType("datetime(6)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ReceiverId");
+
+                    b.HasIndex("SenderId");
+
+                    b.ToTable("BalanceTransfers");
+                });
+
             modelBuilder.Entity("backend.Models.Cart", b =>
                 {
                     b.Property<int>("Id")
@@ -236,6 +394,42 @@ namespace backend.Migrations
                     b.ToTable("CommissionPayouts");
                 });
 
+            modelBuilder.Entity("backend.Models.ImpersonationTicket", b =>
+                {
+                    b.Property<string>("Code")
+                        .HasColumnType("varchar(255)");
+
+                    b.Property<string>("AdminId")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetime");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("datetime");
+
+                    b.Property<string>("Reason")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("ReturnUrl")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("TargetUserId")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<bool>("Used")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<DateTimeOffset?>("UsedAt")
+                        .HasColumnType("datetime");
+
+                    b.HasKey("Code");
+
+                    b.ToTable("ImpersonationTickets");
+                });
+
             modelBuilder.Entity("backend.Models.Order", b =>
                 {
                     b.Property<int>("Id")
@@ -246,6 +440,9 @@ namespace backend.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("datetime")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
 
                     b.Property<decimal>("TotalAmount")
                         .HasColumnType("decimal(10,2)");
@@ -297,12 +494,30 @@ namespace backend.Migrations
                     b.Property<int>("CategoryId")
                         .HasColumnType("int");
 
+                    b.Property<decimal>("CostPrice")
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<decimal>("Price")
-                        .HasColumnType("decimal(10,2)");
+                    b.Property<decimal>("Discount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("DistributorPrice")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("ProductPoint")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("RepurchaseSale")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("RestockQuantity")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("RetailPrice")
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<int>("StockQuantity")
                         .HasColumnType("int");
@@ -311,6 +526,16 @@ namespace backend.Migrations
                         .IsRequired()
                         .HasMaxLength(255)
                         .HasColumnType("varchar(255)");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<int>("VendorId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("WarningStockQuantity")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
@@ -347,24 +572,26 @@ namespace backend.Migrations
                     b.Property<int>("AccessFailedCount")
                         .HasColumnType("int");
 
-                    b.Property<string>("AccountName")
-                        .HasColumnType("longtext");
-
                     b.Property<string>("AccountNumber")
                         .HasColumnType("longtext");
 
-                    b.Property<string>("Address")
-                        .IsRequired()
+                    b.Property<string>("BankBranchName")
                         .HasColumnType("longtext");
 
                     b.Property<string>("BankName")
                         .HasColumnType("longtext");
 
-                    b.Property<string>("CitizenshipNo")
+                    b.Property<string>("CitizenshipImageUrl")
                         .HasColumnType("longtext");
 
-                    b.Property<double>("CommisionAmmount")
-                        .HasColumnType("double");
+                    b.Property<string>("CitizenshipOrPassportIssuedFrom")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("CitizenshipOrPassportNo")
+                        .HasColumnType("longtext");
+
+                    b.Property<decimal>("CommisionAmmount")
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<string>("ConcurrencyStamp")
                         .IsConcurrencyToken()
@@ -373,19 +600,60 @@ namespace backend.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime(6)");
 
-                    b.Property<string>("DOB")
+                    b.Property<string>("DOB_AD")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("DOB_BS")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("DeliveryCity")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("DeliveryCountry")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("DeliveryFullAddress")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("DeliveryZipCode")
                         .HasColumnType("longtext");
 
                     b.Property<string>("Email")
                         .HasMaxLength(256)
                         .HasColumnType("varchar(256)");
 
+                    b.Property<string>("EmailAddress")
+                        .HasColumnType("longtext");
+
                     b.Property<bool>("EmailConfirmed")
                         .HasColumnType("tinyint(1)");
 
-                    b.Property<string>("FullName")
-                        .IsRequired()
+                    b.Property<string>("FatherOrSpouseFirstName")
                         .HasColumnType("longtext");
+
+                    b.Property<string>("FatherOrSpouseLastName")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("FatherOrSpouseMiddleName")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("FirstName")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("Gender")
+                        .HasColumnType("longtext");
+
+                    b.Property<bool>("IsDeliverySameAsPermanent")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<string>("LastName")
+                        .HasColumnType("longtext");
+
+                    b.Property<int>("LastRankAwarded")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("LeadershipBonusGiven")
+                        .HasColumnType("tinyint(1)");
 
                     b.Property<decimal>("LeftWallet")
                         .HasColumnType("decimal(18,2)");
@@ -395,6 +663,21 @@ namespace backend.Migrations
 
                     b.Property<DateTimeOffset?>("LockoutEnd")
                         .HasColumnType("datetime");
+
+                    b.Property<string>("MiddleName")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("MobileNo")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("NameOnAccount")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("NomineeName")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("NomineeRelation")
+                        .HasColumnType("longtext");
 
                     b.Property<string>("NormalizedEmail")
                         .HasMaxLength(256)
@@ -407,7 +690,25 @@ namespace backend.Migrations
                     b.Property<string>("ParentId")
                         .HasColumnType("longtext");
 
+                    b.Property<string>("PassportImageUrl")
+                        .HasColumnType("longtext");
+
                     b.Property<string>("PasswordHash")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("PermanentCity")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("PermanentCountry")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("PermanentFullAddress")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("PermanentZipCode")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("PhoneNo")
                         .HasColumnType("longtext");
 
                     b.Property<string>("PhoneNumber")
@@ -419,6 +720,15 @@ namespace backend.Migrations
                     b.Property<int?>("Position")
                         .HasColumnType("int");
 
+                    b.Property<string>("ProfilePictureUrl")
+                        .HasColumnType("longtext");
+
+                    b.Property<int>("Rank")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("RankBonusGiven")
+                        .HasColumnType("tinyint(1)");
+
                     b.Property<string>("ReferalId")
                         .HasColumnType("longtext");
 
@@ -428,8 +738,11 @@ namespace backend.Migrations
                     b.Property<string>("SecurityStamp")
                         .HasColumnType("longtext");
 
-                    b.Property<double>("TotalWallet")
-                        .HasColumnType("double");
+                    b.Property<decimal>("TotalPoints")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("TotalWallet")
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<bool>("TwoFactorEnabled")
                         .HasColumnType("tinyint(1)");
@@ -437,6 +750,15 @@ namespace backend.Migrations
                     b.Property<string>("UserName")
                         .HasMaxLength(256)
                         .HasColumnType("varchar(256)");
+
+                    b.Property<string>("VatPanIssuedFrom")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("VatPanName")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("VatPanRegistrationNumber")
+                        .HasColumnType("longtext");
 
                     b.HasKey("Id");
 
@@ -448,6 +770,56 @@ namespace backend.Migrations
                         .HasDatabaseName("UserNameIndex");
 
                     b.ToTable("AspNetUsers", (string)null);
+                });
+
+            modelBuilder.Entity("backend.Models.Vendor", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    b.Property<string>("Address")
+                        .HasMaxLength(250)
+                        .HasColumnType("varchar(250)");
+
+                    b.Property<string>("City")
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)");
+
+                    b.Property<string>("CompanyName")
+                        .HasMaxLength(200)
+                        .HasColumnType("varchar(200)");
+
+                    b.Property<string>("ContactPerson")
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)");
+
+                    b.Property<string>("Country")
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)");
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)");
+
+                    b.Property<string>("Phone")
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<string>("TaxId")
+                        .HasColumnType("longtext");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Vendors");
                 });
 
             modelBuilder.Entity("backend.Models.WithdrawalRequest", b =>
@@ -485,6 +857,17 @@ namespace backend.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("WithdrawalRequests");
+                });
+
+            modelBuilder.Entity("FundContribution", b =>
+                {
+                    b.HasOne("backend.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
@@ -536,6 +919,43 @@ namespace backend.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("RewardPayout", b =>
+                {
+                    b.HasOne("backend.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("TeamSalesProgress", b =>
+                {
+                    b.HasOne("backend.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("backend.Models.BalanceTransfer", b =>
+                {
+                    b.HasOne("backend.Models.User", "Receiver")
+                        .WithMany()
+                        .HasForeignKey("ReceiverId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("backend.Models.User", "Sender")
+                        .WithMany()
+                        .HasForeignKey("SenderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Receiver");
+
+                    b.Navigation("Sender");
                 });
 
             modelBuilder.Entity("backend.Models.CartItem", b =>

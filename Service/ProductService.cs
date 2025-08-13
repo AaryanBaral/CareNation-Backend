@@ -28,7 +28,7 @@ namespace backend.Service
             var productId = await _productRepository.AddProduct(product);
             await _productImageService.AddProductImageAsync(images, productId);
             return productId;
-        }
+        } 
 
         public async Task<bool> UpdateProduct(int id, UpdateProductDto dto, List<IFormFile> images)
         {

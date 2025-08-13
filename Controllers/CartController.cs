@@ -1,3 +1,5 @@
+using System.Security.Claims;
+using System.Text.Json;
 using backend.Dto;
 using backend.Interface.Service;
 using Microsoft.AspNetCore.Authorization;
@@ -20,7 +22,7 @@ public class CartController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<SuccessResponseDto<CartReadDto>>> GetCart()
     {
-        string userId = (User.FindFirst("Id")?.Value) ?? throw new UnauthorizedAccessException("Please login to view this");
+        string userId = (User.FindFirstValue(ClaimTypes.NameIdentifier)) ?? throw new UnauthorizedAccessException("Please login to view this");
         var cart = await _service.GetUserCartAsync(userId);
         return Ok(new SuccessResponseDto<CartReadDto> { Data = cart });
     }
@@ -30,7 +32,7 @@ public class CartController : ControllerBase
     public async Task<ActionResult<SuccessResponseDto
     <string>>> AddToCart([FromBody] CartItemDto item)
     {
-        string userId = (User.FindFirst("Id")?.Value) ?? throw new UnauthorizedAccessException("Please login to view this");
+        string userId = (User.FindFirstValue(ClaimTypes.NameIdentifier)) ?? throw new UnauthorizedAccessException("Please login to view this");
         await _service.AddToCartAsync(userId, item);
         return Ok(new SuccessResponseDto<string> { Data = "Item added to cart" });
     }
@@ -38,7 +40,7 @@ public class CartController : ControllerBase
     [HttpDelete("{productId}")]
     public async Task<ActionResult<SuccessResponseDto<string>>> RemoveItem(int productId)
     {
-        string userId = (User.FindFirst("Id")?.Value) ?? throw new UnauthorizedAccessException("Please login to view this");
+        string userId = (User.FindFirstValue(ClaimTypes.NameIdentifier)) ?? throw new UnauthorizedAccessException("Please login to view this");
         await _service.RemoveFromCartAsync(userId, productId);
         return Ok(new SuccessResponseDto<string> { Data = "Item removed from cart" });
     }
@@ -46,14 +48,14 @@ public class CartController : ControllerBase
     [HttpDelete("clear")]
     public async Task<ActionResult<SuccessResponseDto<string>>> ClearCart()
     {
-        string userId = (User.FindFirst("Id")?.Value) ?? throw new UnauthorizedAccessException("Please login to view this");
+        string userId = (User.FindFirstValue(ClaimTypes.NameIdentifier)) ?? throw new UnauthorizedAccessException("Please login to view this");
         await _service.ClearCartAsync(userId);
         return Ok(new SuccessResponseDto<string> { Data = "Cart cleared" });
     }
     [HttpPut("update-quantity")]
 public async Task<ActionResult<SuccessResponseDto<string>>> UpdateItemQuantity([FromBody] UpdateQuantityDto dto)
 {
-    string userId = (User.FindFirst("Id")?.Value) ?? throw new UnauthorizedAccessException("Please login to update cart");
+    string userId = (User.FindFirstValue(ClaimTypes.NameIdentifier)) ?? throw new UnauthorizedAccessException("Please login to update cart");
 
     await _service.UpdateItemQuantityAsync(userId, dto.ProductId, dto.Quantity);
 

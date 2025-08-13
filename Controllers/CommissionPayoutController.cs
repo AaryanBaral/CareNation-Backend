@@ -1,9 +1,11 @@
 using backend.Interface.Service;
 using backend.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace backend.Controllers
 {
+    [Authorize(Policy = "SensitiveAction")]
     [ApiController]
     [Route("api/[controller]")]
     public class CommissionPayoutController : ControllerBase

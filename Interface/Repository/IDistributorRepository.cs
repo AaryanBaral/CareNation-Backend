@@ -16,4 +16,12 @@ public interface IDistributorRepository
     Task<List<User>> GetPeopleIReferredAsync(string myUserId);
     Task<List<User>> GetMyUplineAsync(string myUserId);
     Task ProcessCommissionOnSaleAsync(string userId, decimal saleAmount);
-    }
+    Task<int> GetReferralCountAsync(string userId);
+    Task UpdateProfilePictureUrlAsync(string userId, string? imageUrl);
+    Task UpdateCitizenshipImageUrlAsync(string userId, string? imageUrl);
+    Task<List<User>> GetMyDownlineAsync(string userId);
+    Task ChangeParentAsync(string userId, string newParentId);
+    Task<WalletStatementDto> GetWalletStatementAsync(string userId);
+    Task<List<User>> GetDownlineAsync(string userId);
+
+}

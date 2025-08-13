@@ -46,7 +46,7 @@ namespace backend.Data
         {
             _transaction?.Dispose();
             _context.Dispose();
+
         }
     }
-
 }

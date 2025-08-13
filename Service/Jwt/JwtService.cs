@@ -1,77 +1,101 @@
-
+// backend/Service/Jwt/JwtService.cs
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using backend.Configurations;
-using backend.Data;
+using backend.Interface.Service;
 using backend.Models;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 
 namespace backend.Service.Jwt
 {
-    public class JwtService(
-        IOptions<JwtConfig> config) : IJwtService
+
+
+   public class TokenService : ITokenService
     {
-        private readonly JwtConfig _config = config.Value;
+        private readonly IConfiguration _cfg;
+        public TokenService(IConfiguration cfg) => _cfg = cfg;
 
-        public string GenerateJwtToken(User user)
+        public TokenPair CreateAccessToken(
+            User user,
+            IEnumerable<Claim>? extraClaims = null,
+            bool isImpersonation = false,
+            IEnumerable<string>? roles = null)
         {
-            try
+            // ---- Config
+            var issuer   = _cfg["Jwt:Issuer"];
+            var audience = _cfg["Jwt:Audience"];
+            var keyBytes = Encoding.UTF8.GetBytes(_cfg["Jwt:Key"] ?? throw new InvalidOperationException("Jwt:Key missing"));
+            var key      = new SymmetricSecurityKey(keyBytes);
+
+            var minutes = isImpersonation
+                ? int.Parse(_cfg["Jwt:ImpersonationMinutes"] ?? "45")
+                : int.Parse(_cfg["Jwt:AccessTokenMinutes"] ?? "60");
+
+            var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+            var now   = DateTime.UtcNow;
+            var iat   = new DateTimeOffset(now).ToUnixTimeSeconds().ToString();
+
+            // ---- Base claims
+            var claims = new List<Claim>
             {
-                var jwtTokenHandler = new JwtSecurityTokenHandler();
+                new(ClaimTypes.NameIdentifier, user.Id),
+                new("Id", user.Id),
+                new(ClaimTypes.Name, user.FirstName ?? user.UserName ?? user.Email ?? "User"),
+                new(JwtRegisteredClaimNames.Sub, user.Id),                       // stable subject = userId
+                new(JwtRegisteredClaimNames.Email, user.Email ?? string.Empty),
+                new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+                new(JwtRegisteredClaimNames.Iat, iat, ClaimValueTypes.Integer64)
+            };
 
-                // convert the string into byte of arrays
-                var key = Encoding.UTF8.GetBytes(_config.Secret);
-                /* Claims
-                    this is used to add key-value pair of data that should be encrypted
-                    and added to the jwt token
-                */
-                var claims = new ClaimsIdentity([
-                    new Claim("Id", user.Id),
-                new Claim(JwtRegisteredClaimNames.Sub,
-                    user.Email ?? throw new ArgumentNullException(nameof(user), "User's Email cannot be null")),
-                new Claim(JwtRegisteredClaimNames.Email, user.Email),
-                new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
-                new Claim(JwtRegisteredClaimNames.Iat, new DateTimeOffset(DateTime.UtcNow).ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64)
-            ]);
-
-                /*
-                    A token descriptor describes the properites and values to be in the token
-                */
-                var tokenDescriptor = new SecurityTokenDescriptor()
+            // ---- Roles (both standard and "role")
+            if (roles != null)
+            {
+                foreach (var r in roles)
                 {
-                    Subject = claims,
-                    Expires = DateTime.UtcNow.Add(_config.ExpiryTimeFrame),
-                    SigningCredentials =
-                        new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256)
-                };
-                var token = jwtTokenHandler.CreateToken(tokenDescriptor);
-                var jwtToken = jwtTokenHandler.WriteToken(token);
-
-
-                // //  creating a new refresh token
-                // var refreshToken = new RefreshToken()
-                // {
-                //     JwtId = token.Id,
-                //     Token = RandomStringGenerator(23), // Generate a refresh token
-                //     ExpiryDate = DateTime.UtcNow.AddMonths(6),
-                //     UserId = user.Id,
-                //     IsRevoked = false,
-                //     IsUsed = false,
-                //     AddedDate = DateTime.UtcNow,
-                // };
-
-                // adding the refresh token to the database
-                // await _context.RefreshTokens.AddAsync(refreshToken);
-                // await _context.SaveChangesAsync();
-
-                return jwtToken;
+                    if (!string.IsNullOrWhiteSpace(r))
+                    {
+                        claims.Add(new(ClaimTypes.Role, r));
+                        claims.Add(new("role", r));
+                    }
+                }
             }
-            catch (Exception ex)
+
+            // ---- Normal vs Impersonation
+            if (isImpersonation)
             {
-                throw new Exception($"Server Error {ex.Message}");
+                // Ensure required impersonation claims (extraClaims may also include these)
+                if (extraClaims is null || !extraClaims.Any(c => c.Type == "impersonation"))
+                    claims.Add(new("impersonation", "true"));
+
+                // acr for context
+                if (extraClaims is null || !extraClaims.Any(c => c.Type == "acr"))
+                    claims.Add(new("acr", "impersonation"));
             }
+            else
+            {
+                // Normal login tokens: recent password + exempt from reauth prompts in policy
+                claims.Add(new("auth_time", iat));
+                claims.Add(new("amr", "pwd"));
+                claims.Add(new("reauth_exempt", "true"));
+            }
+
+            // ---- Merge any extra claims last (so caller can override/add)
+            if (extraClaims != null) claims.AddRange(extraClaims);
+
+            // ---- Build JWT
+            var token = new JwtSecurityToken(
+                issuer: issuer,
+                audience: audience,
+                claims: claims,
+                notBefore: now,
+                expires: now.AddMinutes(minutes),   // normal has AccessTokenMinutes; impersonation is short-lived
+                signingCredentials: creds
+            );
+
+            var access = new JwtSecurityTokenHandler().WriteToken(token);
+            return new TokenPair(access, token.ValidTo);
         }
     }
 }

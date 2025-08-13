@@ -1,11 +1,19 @@
 
 
+using System.Security.Claims;
+using backend.Interface.Service;
 using backend.Models;
 
 namespace backend.Service.Jwt
 {
-    public interface IJwtService
+    public interface ITokenService
     {
-        string GenerateJwtToken(User user);
+        TokenPair CreateAccessToken(
+            User user,
+            IEnumerable<Claim>? extraClaims = null,
+            bool isImpersonation = false,
+            IEnumerable<string>? roles = null
+        );
     }
+
 }

@@ -58,10 +58,10 @@ namespace backend.Repository
                     query = query.Where(p => p.Title.ToLower().Contains(name.ToLower()));
 
                 if (minPrice.HasValue)
-                    query = query.Where(p => p.Price >= minPrice.Value);
+                    query = query.Where(p => p.RetailPrice >= minPrice.Value);
 
                 if (maxPrice.HasValue)
-                    query = query.Where(p => p.Price <= maxPrice.Value);
+                    query = query.Where(p => p.RetailPrice <= maxPrice.Value);
 
                 if (categoryId.HasValue)
                     query = query.Where(p => p.CategoryId == categoryId.Value);

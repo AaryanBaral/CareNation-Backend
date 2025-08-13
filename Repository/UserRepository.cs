@@ -7,14 +7,16 @@ using Microsoft.EntityFrameworkCore;
 
 namespace backend.Repository
 {
-    public class UserRepository(UserManager<User> userManager, RoleManager<IdentityRole> roleManager, AppDbContext context) : IUserRepository
+    public class UserRepository(UserManager<User> userManager, RoleManager<IdentityRole> roleManager, AppDbContext context, IUserIdGenerator userIdGenerator) : IUserRepository
     {
         private readonly UserManager<User> _userManager = userManager;
         private readonly RoleManager<IdentityRole> _roleManager = roleManager;
         private readonly AppDbContext _context = context;
+        private readonly IUserIdGenerator _userIdGenerator = userIdGenerator;
 
         public async Task AddUser(User user, string role, string password)
         {
+            user.Id = await _userIdGenerator.NextAsync();
             // Check if role exists, create if not
             if (!await _roleManager.RoleExistsAsync(role))
             {
@@ -32,9 +34,9 @@ namespace backend.Repository
                 throw new Exception("User creation failed: " + string.Join("; ", result.Errors.Select(e => e.Description)));
             }
         }
-            public async Task<List<string>> LoginAndGetRole(string email, string password)
+        public async Task<List<string>> LoginAndGetRole(string email, string password)
         {
-            var user = await _userManager.FindByEmailAsync(email)?? throw new KeyNotFoundException("Invalid credentials");
+            var user = await _userManager.FindByEmailAsync(email) ?? throw new KeyNotFoundException("Invalid credentials");
             var result = await _userManager.CheckPasswordAsync(user, password);
             if (!result) throw new KeyNotFoundException("Invalid Exception");
             var roles = user != null ? await _userManager.GetRolesAsync(user) : null;
@@ -135,6 +137,7 @@ namespace backend.Repository
 
             return true;
         }
+        
 
     }
 }

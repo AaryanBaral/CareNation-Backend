@@ -1,6 +1,10 @@
+using System.Security.Claims;
+using backend.Dto;
 using backend.Interface.Service;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
+[Authorize(AuthenticationSchemes = "Bearer")]
 [ApiController]
 [Route("api/reports")]
 public class ReportsController : ControllerBase
@@ -83,15 +87,31 @@ public class ReportsController : ControllerBase
         return Ok(result);
     }
     [HttpGet("full-transactional-report")]
-public async Task<IActionResult> GetFullTransactionalReport(
+    public async Task<IActionResult> GetFullTransactionalReport(
     [FromQuery] string? userId = null,
     [FromQuery] DateTime? from = null,
     [FromQuery] DateTime? to = null)
-{
+    {
+
+        var result = await _service.GetFullTransactionalReportAsync(userId, from, to);
+        return Ok(result);
+    }
+
+    [HttpGet("total-sales")]
+    public async Task<ActionResult<TotalSalesDto>> GetTotalSalesByDistributor(
+        [FromQuery] DateTime? from = null,
+        [FromQuery] DateTime? to = null)
+    {
+        string distributorId = (User.FindFirstValue(ClaimTypes.NameIdentifier)) ?? throw new UnauthorizedAccessException("Please login to view this");
+        var result = await _service.GetTotalSalesByDistributorAsync(distributorId, from, to);
+
+        if (result == null)
+            return NotFound("Distributor not found or no sales data.");
+
+        return Ok(result);
+    }
+
     
-    var result = await _service.GetFullTransactionalReportAsync(userId, from, to);
-    return Ok(result);
-}
 
 
 

@@ -11,9 +11,9 @@ namespace backend.Service
 
         public OrderItemService(IOrderItemRepository repository)
         {
-            _repository = repository;
+            _repository = repository; 
         }
-
+ 
         public async Task<List<OrderItemReadDto>> GetItemsByOrderIdAsync(int orderId)
         {
             var items = await _repository.GetOrderItemsByOrderIdAsync(orderId);

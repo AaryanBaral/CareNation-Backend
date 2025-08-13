@@ -13,8 +13,8 @@ namespace backend.Service
     public class UserService : IUserService
     {
         private readonly IUserRepository _userRepo;
-        private readonly IJwtService _jwtService;
-        public UserService(IUserRepository userRepo, IJwtService jwtService)
+        private readonly ITokenService _jwtService;
+        public UserService(IUserRepository userRepo, ITokenService jwtService)
         {
             _userRepo = userRepo;
             _jwtService = jwtService;
@@ -33,8 +33,8 @@ namespace backend.Service
         public async Task<string> Login(UserLoginDto dto)
         {
             var user = await _userRepo.Login(dto) ?? throw new AuthenticationFailureException("Invalid Credentials");
-            var token = _jwtService.GenerateJwtToken(user);
-            return token;
+            var token = _jwtService.CreateAccessToken(user);
+            return token.AccessToken;
         }
 
         public async Task<UserReadDto?> GetById(string id)

@@ -1,3 +1,5 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 using System.Text;
 using backend.Configurations;
 using backend.Data;
@@ -42,7 +44,7 @@ namespace backend.Extension
 
                 options.AddPolicy("AllowAny", builder =>
                 {
-                    builder.WithOrigins("http://localhost:5173", "https://localhost:5173", "http://localhost:5174")
+                    builder.WithOrigins("http://localhost:5173", "https://localhost:5173", "http://localhost:5174", "http://localhost:5175")
                            .AllowAnyHeader()
                            .AllowAnyMethod()
                            .AllowCredentials();
@@ -62,6 +64,9 @@ namespace backend.Extension
             service.AddScoped<IDistributorRepository, DistributorRepository>();
             service.AddScoped<IReportRepository, ReportRepository>();
             service.AddScoped<ICommissionPayoutRepository, CommissionPayoutRepository>();
+            service.AddScoped<IBalanceTransferRepository, BalanceTransferRepository>();
+            service.AddScoped<IAdminRepository, AdminRepository>();
+            service.AddScoped<IWithdrawalRequestRepository, WithdrawalRequestRepository>();
         }
         public static void AddServices(this IServiceCollection service)
         {
@@ -71,11 +76,16 @@ namespace backend.Extension
             service.AddScoped<IOrderService, OrderService>();
             service.AddScoped<IProductImageService, ProductImageService>();
             service.AddScoped<IOrderItemService, OrderItemService>();
-            service.AddScoped<IJwtService, JwtService>();
+            service.AddScoped<ITokenService, TokenService>();
             service.AddScoped<ICartService, CartService>();
+            service.AddScoped<ITokenService, TokenService>();
+            service.AddControllers(o => o.Filters.Add<backend.Logging.ImpersonationAuditFilter>());
             service.AddScoped<IDistributorService, DistributorService>();
             service.AddScoped<IReportService, ReportService>();
-            service.AddScoped<ICommissionPayoutService, CommissionPayoutService>();
+            service.AddScoped<IBalanceTransferService, BalanceTransferService>();
+            service.AddScoped<IAdminService, AdminService>();
+            service.AddScoped<IUserIdGenerator, UserIdGenerator>();
+            service.AddScoped<IWithdrawalRequestService, WithdrawalRequestService>();
 
         }
 
@@ -89,31 +99,34 @@ namespace backend.Extension
         {
             service.AddScoped<IUnitOfWork, UnitOfWork>();
         }
-            public static void AddJwtAuthentication(this IServiceCollection services, IConfiguration configuration)
+        public static void AddJwtAuthentication(this IServiceCollection services, IConfiguration configuration)
+        {
+            // Bind and validate your JWT config
+            services.Configure<JwtConfig>(configuration.GetSection("Jwt"));
+            JwtSecurityTokenHandler.DefaultInboundClaimTypeMap.Clear();
+
+            var secret = configuration["Jwt:Key"]
+                         ?? throw new NullReferenceException("Jwt secret is null");
+
+            var key = Encoding.ASCII.GetBytes(secret);
+            // Add JWT Bearer authentication
+            services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(o =>
     {
-        // Bind and validate your JWT config
-        services.Configure<JwtConfig>(configuration.GetSection("JwtConfig"));
-
-        var secret = configuration["JwtConfig:Secret"]
-                     ?? throw new NullReferenceException("Jwt secret is null");
-
-        var key = Encoding.ASCII.GetBytes(secret);
-
-        // Add JWT Bearer authentication
-        services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-            .AddJwtBearer(options =>
-            {
-                options.TokenValidationParameters = new TokenValidationParameters
-                {
-                    ValidateIssuerSigningKey = true,
-                    IssuerSigningKey = new SymmetricSecurityKey(key),
-                    ValidateIssuer = false,
-                    ValidateAudience = false,
-                    ClockSkew = TimeSpan.Zero, // optional: disable expiration delay
-                    ValidateLifetime = true
-                };
-            });
-    }
+        o.TokenValidationParameters = new TokenValidationParameters
+        {
+            IssuerSigningKey = new SymmetricSecurityKey(key),
+            ValidateIssuerSigningKey = true,
+            ValidateIssuer = false,  // set true + ValidIssuer if you want
+            ValidateAudience = false, // set true + ValidAudience if you want
+            ValidateLifetime = true,
+            NameClaimType = ClaimTypes.NameIdentifier,
+            RoleClaimType = ClaimTypes.Role,
+            ClockSkew = TimeSpan.Zero
+        };
+        o.SaveToken = true;
+    });
+        }
 
     }
 }

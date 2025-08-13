@@ -4,6 +4,7 @@ using backend.Data;
 using backend.Interface.Repository;
 using Microsoft.AspNetCore.Identity;
 using backend.Models;
+using System.Linq;
 
 public class ReportRepository : IReportRepository
 {
@@ -13,6 +14,15 @@ public class ReportRepository : IReportRepository
     {
         _context = context;
         _userManager = userManager;
+    }
+
+    // Helper for in-memory name composition
+    private static string BuildFullName(string? first, string? middle, string? last)
+    {
+        var parts = new[] { first, middle, last }
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .Select(s => s!.Trim());
+        return string.Join(" ", parts);
     }
 
     public async Task<List<SalesByProductDto>> GetSalesByProductAsync(DateTime? from = null, DateTime? to = null)
@@ -143,6 +153,94 @@ public class ReportRepository : IReportRepository
         return result;
     }
 
+    public async Task<List<SalesByTimeDto>> GetSalesByTimeForDistributorAsync(string distributorId, DateTime? from = null, DateTime? to = null, string period = "day")
+    {
+        // Step 1: Get all downline user IDs including self
+        var allUsers = await _context.Users.ToListAsync();
+        var userIds = new List<string>();
+
+        void Traverse(string parentId)
+        {
+            var children = allUsers.Where(u => u.ParentId == parentId).ToList();
+            foreach (var child in children)
+            {
+                userIds.Add(child.Id);
+                Traverse(child.Id);
+            }
+        }
+
+        userIds.Add(distributorId); // include self
+        Traverse(distributorId);
+
+        // Step 2: Filter orders by those user IDs
+        var query = _context.Orders.Where(o => userIds.Contains(o.UserId));
+
+        if (from != null)
+            query = query.Where(o => o.OrderDate >= from.Value);
+        if (to != null)
+            query = query.Where(o => o.OrderDate <= to.Value);
+
+        var data = await query
+            .Select(o => new { o.OrderDate, o.TotalAmount })
+            .ToListAsync();
+
+        List<SalesByTimeDto> result;
+
+        switch (period.ToLower())
+        {
+            case "year":
+                result = data
+                    .GroupBy(o => o.OrderDate.Year)
+                    .Select(g => new SalesByTimeDto
+                    {
+                        Date = new DateTime(g.Key, 1, 1),
+                        TotalSales = g.Sum(x => x.TotalAmount)
+                    })
+                    .OrderBy(x => x.Date)
+                    .ToList();
+                break;
+
+            case "quarter":
+                result = data
+                    .GroupBy(o => new { o.OrderDate.Year, Quarter = (o.OrderDate.Month - 1) / 3 + 1 })
+                    .Select(g => new SalesByTimeDto
+                    {
+                        Date = new DateTime(g.Key.Year, (g.Key.Quarter - 1) * 3 + 1, 1),
+                        TotalSales = g.Sum(x => x.TotalAmount)
+                    })
+                    .OrderBy(x => x.Date)
+                    .ToList();
+                break;
+
+            case "month":
+                result = data
+                    .GroupBy(o => new { o.OrderDate.Year, o.OrderDate.Month })
+                    .Select(g => new SalesByTimeDto
+                    {
+                        Date = new DateTime(g.Key.Year, g.Key.Month, 1),
+                        TotalSales = g.Sum(x => x.TotalAmount)
+                    })
+                    .OrderBy(x => x.Date)
+                    .ToList();
+                break;
+
+            case "day":
+            default:
+                result = data
+                    .GroupBy(o => o.OrderDate.Date)
+                    .Select(g => new SalesByTimeDto
+                    {
+                        Date = g.Key,
+                        TotalSales = g.Sum(x => x.TotalAmount)
+                    })
+                    .OrderBy(x => x.Date)
+                    .ToList();
+                break;
+        }
+
+        return result;
+    }
+
     public async Task<List<DistributorAccountBalanceDto>> GetDistributorAccountBalancesAsync()
     {
         var distributors = await _context.Users
@@ -150,7 +248,7 @@ public class ReportRepository : IReportRepository
             .Select(u => new DistributorAccountBalanceDto
             {
                 DistributorId = u.Id,
-                DistributorName = u.FullName,
+                DistributorName = (u.FirstName + " " + (u.MiddleName ?? "") + " " + u.LastName).Trim(),
                 DistributorEmail = u.Email!,
                 TotalWallet = u.TotalWallet,
                 CommissionAmount = u.CommisionAmmount
@@ -159,6 +257,7 @@ public class ReportRepository : IReportRepository
 
         return distributors;
     }
+
     public async Task<List<ProductStockReportDto>> GetProductStockReportAsync(int reorderLevel = 10)
     {
         return await _context.Products
@@ -173,6 +272,7 @@ public class ReportRepository : IReportRepository
             .OrderBy(p => p.StockQuantity)
             .ToListAsync();
     }
+
     public async Task<PersonalEarningsDto?> GetPersonalEarningsAsync(string distributorId, DateTime? from = null, DateTime? to = null)
     {
         var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == distributorId);
@@ -189,13 +289,14 @@ public class ReportRepository : IReportRepository
         return new PersonalEarningsDto
         {
             DistributorId = user.Id,
-            DistributorName = user.FullName,
+            DistributorName = BuildFullName(user.FirstName, user.MiddleName, user.LastName),
             DistributorEmail = user.Email!,
             TotalPersonalSales = totalSales,
             TotalCommission = user.CommisionAmmount,
             TotalWallet = user.TotalWallet
         };
     }
+
     public async Task<List<DistributorPerformanceDto>> GetDistributorPerformanceReportAsync(DateTime? from = null, DateTime? to = null)
     {
         var users = await _context.Users.ToListAsync();
@@ -245,7 +346,7 @@ public class ReportRepository : IReportRepository
             report.Add(new DistributorPerformanceDto
             {
                 DistributorId = user.Id,
-                DistributorName = user.FullName,
+                DistributorName = BuildFullName(user.FirstName, user.MiddleName, user.LastName),
                 DistributorEmail = user.Email!,
                 DirectRecruits = directRecruits,
                 TotalDownline = totalDownline,
@@ -257,8 +358,8 @@ public class ReportRepository : IReportRepository
 
         return report;
     }
-    public async Task<List<UserGrowthDto>> GetUserGrowthReportAsync(
-    string period = "month", DateTime? from = null, DateTime? to = null)
+
+    public async Task<List<UserGrowthDto>> GetUserGrowthReportAsync(string period = "month", DateTime? from = null, DateTime? to = null)
     {
         var query = _context.Users.AsQueryable();
 
@@ -278,19 +379,12 @@ public class ReportRepository : IReportRepository
         }
 
         // Now group in-memory
-        Func<User, DateTime> groupKeySelector;
-        switch (period)
+        Func<User, DateTime> groupKeySelector = period switch
         {
-            case "day":
-                groupKeySelector = u => u.CreatedAt.Date;
-                break;
-            case "year":
-                groupKeySelector = u => new DateTime(u.CreatedAt.Year, 1, 1);
-                break;
-            default:
-                groupKeySelector = u => new DateTime(u.CreatedAt.Year, u.CreatedAt.Month, 1);
-                break;
-        }
+            "day" => u => u.CreatedAt.Date,
+            "year" => u => new DateTime(u.CreatedAt.Year, 1, 1),
+            _ => u => new DateTime(u.CreatedAt.Year, u.CreatedAt.Month, 1),
+        };
 
         var distributorRoleName = "Distributor";
 
@@ -307,6 +401,7 @@ public class ReportRepository : IReportRepository
 
         return report;
     }
+
     public async Task<List<WithdrawalRequestDto>> GetWithdrawalRequestsAsync(DateTime? from = null, DateTime? to = null, string? status = null)
     {
         var query = _context.WithdrawalRequests
@@ -326,7 +421,7 @@ public class ReportRepository : IReportRepository
             {
                 Id = w.Id,
                 DistributorId = w.UserId,
-                DistributorName = w.User.FullName,
+                DistributorName = (w.User.FirstName + " " + (w.User.MiddleName ?? "") + " " + w.User.LastName).Trim(),
                 DistributorEmail = w.User.Email!,
                 Amount = w.Amount,
                 RequestDate = w.RequestDate,
@@ -338,6 +433,7 @@ public class ReportRepository : IReportRepository
 
         return list;
     }
+
     public async Task<List<CommissionPayoutDto>> GetCommissionPayoutsAsync(DateTime? from = null, DateTime? to = null, string? status = null)
     {
         var query = _context.CommissionPayouts
@@ -357,7 +453,7 @@ public class ReportRepository : IReportRepository
             {
                 Id = p.Id,
                 DistributorId = p.UserId,
-                DistributorName = p.User.FullName,
+                DistributorName = (p.User.FirstName + " " + (p.User.MiddleName ?? "") + " " + p.User.LastName).Trim(),
                 DistributorEmail = p.User.Email!,
                 Amount = p.Amount,
                 PayoutDate = p.PayoutDate,
@@ -368,6 +464,7 @@ public class ReportRepository : IReportRepository
 
         return list;
     }
+
     public async Task<List<CommissionPayoutSummaryDto>> GetCommissionPayoutSummaryAsync(DateTime? from = null, DateTime? to = null)
     {
         var payouts = _context.CommissionPayouts
@@ -379,13 +476,23 @@ public class ReportRepository : IReportRepository
         if (to.HasValue)
             payouts = payouts.Where(p => p.PayoutDate <= to.Value);
 
+        // Group by UserId + name parts to avoid grouping by a computed string
         var summary = await payouts
-            .GroupBy(p => new { p.UserId, p.User.FullName, p.User.Email })
-            .Select(g => new CommissionPayoutSummaryDto
+            .GroupBy(p => new
             {
-                DistributorId = g.Key.UserId,
-                DistributorName = g.Key.FullName,
-                DistributorEmail = g.Key.Email!,
+                p.UserId,
+                p.User.FirstName,
+                p.User.MiddleName,
+                p.User.LastName,
+                p.User.Email
+            })
+            .Select(g => new
+            {
+                g.Key.UserId,
+                g.Key.FirstName,
+                g.Key.MiddleName,
+                g.Key.LastName,
+                g.Key.Email,
                 TotalPaid = g.Where(p => p.Status == "Paid").Sum(p => (decimal?)p.Amount) ?? 0,
                 TotalPending = g.Where(p => p.Status == "Pending").Sum(p => (decimal?)p.Amount) ?? 0,
                 TotalFailed = g.Where(p => p.Status == "Failed").Sum(p => (decimal?)p.Amount) ?? 0,
@@ -394,8 +501,19 @@ public class ReportRepository : IReportRepository
             .OrderByDescending(s => s.TotalPaid)
             .ToListAsync();
 
-        return summary;
+        // Compose name in memory
+        return summary.Select(s => new CommissionPayoutSummaryDto
+        {
+            DistributorId = s.UserId,
+            DistributorName = BuildFullName(s.FirstName, s.MiddleName, s.LastName),
+            DistributorEmail = s.Email!,
+            TotalPaid = s.TotalPaid,
+            TotalPending = s.TotalPending,
+            TotalFailed = s.TotalFailed,
+            TotalPayouts = s.TotalPayouts
+        }).ToList();
     }
+
     public async Task<List<WithdrawalTransactionDto>> GetWithdrawalTransactionsAsync(DateTime? from = null, DateTime? to = null)
     {
         var query = _context.WithdrawalRequests
@@ -413,7 +531,7 @@ public class ReportRepository : IReportRepository
             {
                 Id = w.Id,
                 DistributorId = w.UserId,
-                DistributorName = w.User.FullName,
+                DistributorName = (w.User.FirstName + " " + (w.User.MiddleName ?? "") + " " + w.User.LastName).Trim(),
                 DistributorEmail = w.User.Email!,
                 Amount = w.Amount,
                 RequestDate = w.RequestDate,
@@ -426,78 +544,119 @@ public class ReportRepository : IReportRepository
     public async Task<List<FullTransactionDto>> GetFullTransactionalReportAsync(
         string? userId = null, DateTime? from = null, DateTime? to = null)
     {
-        // Sales/Orders
+        // Orders
         var orderQuery = _context.Orders.AsQueryable();
-        if (userId != null) orderQuery = orderQuery.Where(o => o.UserId == userId);
-        if (from != null) orderQuery = orderQuery.Where(o => o.OrderDate >= from);
-        if (to != null) orderQuery = orderQuery.Where(o => o.OrderDate <= to);
+        if (!string.IsNullOrEmpty(userId)) orderQuery = orderQuery.Where(o => o.UserId == userId);
+        if (from.HasValue) orderQuery = orderQuery.Where(o => o.OrderDate >= from.Value);
+        if (to.HasValue) orderQuery = orderQuery.Where(o => o.OrderDate <= to.Value);
 
-        var orders = await (from o in orderQuery
-                            join u in _context.Users on o.UserId equals u.Id
-                            select new FullTransactionDto
-                            {
-                                TransactionType = "Sale",
-                                TransactionId = o.Id,
-                                UserId = o.UserId,
-                                UserName = u.FullName,
-                                UserEmail = u.Email!,
-                                Amount = o.TotalAmount,
-                                Date = o.OrderDate,
-                                Status = "Completed",
-                                Remarks = null
-                            }).ToListAsync();
+        var orders = await
+            (from o in orderQuery
+             join u in _context.Users on o.UserId equals u.Id
+             select new FullTransactionDto
+             {
+                 TransactionType = "Sale",
+                 TransactionId = o.Id,
+                 UserId = o.UserId,
+                 UserName = (u.FirstName + " " + (u.MiddleName ?? "") + " " + u.LastName).Trim(),
+                 UserEmail = u.Email ?? "",
+                 Amount = o.TotalAmount,
+                 Date = o.OrderDate,
+                 Status = "Completed",
+                 Remarks = null
+             })
+            .ToListAsync();
 
         // Commission Payouts
         var payoutQuery = _context.CommissionPayouts.AsQueryable();
-        if (userId != null) payoutQuery = payoutQuery.Where(p => p.UserId == userId);
-        if (from != null) payoutQuery = payoutQuery.Where(p => p.PayoutDate >= from);
-        if (to != null) payoutQuery = payoutQuery.Where(p => p.PayoutDate <= to);
+        if (!string.IsNullOrEmpty(userId)) payoutQuery = payoutQuery.Where(p => p.UserId == userId);
+        if (from.HasValue) payoutQuery = payoutQuery.Where(p => p.PayoutDate >= from.Value);
+        if (to.HasValue) payoutQuery = payoutQuery.Where(p => p.PayoutDate <= to.Value);
 
-        var payouts = await (from p in payoutQuery
-                             join u in _context.Users on p.UserId equals u.Id
-                             select new FullTransactionDto
-                             {
-                                 TransactionType = "CommissionPayout",
-                                 TransactionId = p.Id,
-                                 UserId = p.UserId,
-                                 UserName = u.FullName,
-                                 UserEmail = u.Email!,
-                                 Amount = p.Amount,
-                                 Date = p.PayoutDate,
-                                 Status = p.Status,
-                                 Remarks = p.Remarks
-                             }).ToListAsync();
+        var payouts = await
+            (from p in payoutQuery
+             join u in _context.Users on p.UserId equals u.Id
+             select new FullTransactionDto
+             {
+                 TransactionType = "Commission Payout",
+                 TransactionId = p.Id,
+                 UserId = p.UserId,
+                 UserName = (u.FirstName + " " + (u.MiddleName ?? "") + " " + u.LastName).Trim(),
+                 UserEmail = u.Email ?? "",
+                 Amount = p.Amount,
+                 Date = p.PayoutDate,
+                 Status = p.Status,
+                 Remarks = p.Remarks
+             })
+            .ToListAsync();
 
         // Withdrawals
         var withdrawalQuery = _context.WithdrawalRequests.AsQueryable();
-        if (userId != null) withdrawalQuery = withdrawalQuery.Where(w => w.UserId == userId);
-        if (from != null) withdrawalQuery = withdrawalQuery.Where(w => w.RequestDate >= from);
-        if (to != null) withdrawalQuery = withdrawalQuery.Where(w => w.RequestDate <= to);
+        if (!string.IsNullOrEmpty(userId)) withdrawalQuery = withdrawalQuery.Where(w => w.UserId == userId);
+        if (from.HasValue) withdrawalQuery = withdrawalQuery.Where(w => w.RequestDate >= from.Value);
+        if (to.HasValue) withdrawalQuery = withdrawalQuery.Where(w => w.RequestDate <= to.Value);
 
-        var withdrawals = await (from w in withdrawalQuery
-                                 join u in _context.Users on w.UserId equals u.Id
-                                 select new FullTransactionDto
-                                 {
-                                     TransactionType = "Withdrawal",
-                                     TransactionId = w.Id,
-                                     UserId = w.UserId,
-                                     UserName = u.FullName,
-                                     UserEmail = u.Email!,
-                                     Amount = w.Amount,
-                                     Date = w.RequestDate,
-                                     Status = w.Status,
-                                     Remarks = w.Remarks
-                                 }).ToListAsync();
+        var withdrawals = await
+            (from w in withdrawalQuery
+             join u in _context.Users on w.UserId equals u.Id
+             select new FullTransactionDto
+             {
+                 TransactionType = "Withdrawal",
+                 TransactionId = w.Id,
+                 UserId = w.UserId,
+                 UserName = (u.FirstName + " " + (u.MiddleName ?? "") + " " + u.LastName).Trim(),
+                 UserEmail = u.Email ?? "",
+                 Amount = w.Amount,
+                 Date = w.RequestDate,
+                 Status = w.Status,
+                 Remarks = w.Remarks
+             })
+            .ToListAsync();
 
-        // Combine all
-        var allTransactions = orders
+        // Balance Transfers
+        var transferQuery = _context.BalanceTransfers
+            .Include(t => t.Sender)
+            .Include(t => t.Receiver)
+            .AsQueryable();
+
+        if (!string.IsNullOrEmpty(userId))
+            transferQuery = transferQuery.Where(t => t.SenderId == userId || t.ReceiverId == userId);
+
+        if (from.HasValue) transferQuery = transferQuery.Where(t => t.TransferDate >= from.Value);
+        if (to.HasValue) transferQuery = transferQuery.Where(t => t.TransferDate <= to.Value);
+
+        var transfers = await transferQuery
+            .Select(t => new FullTransactionDto
+            {
+                TransactionType = "Balance Transfer",
+                TransactionId = t.Id,
+                UserId = t.SenderId,
+                UserName = (t.Sender.FirstName + " " + (t.Sender.MiddleName ?? "") + " " + t.Sender.LastName).Trim(),
+                UserEmail = t.Sender.Email ?? "",
+                Amount = t.Amount,
+                Date = t.TransferDate,
+                Status = "Completed",
+                Remarks =
+                    "Sent from " +
+                    (t.Sender.FirstName + " " + (t.Sender.MiddleName ?? "") + " " + t.Sender.LastName).Trim() +
+                    " to " +
+                    (t.Receiver.FirstName + " " + (t.Receiver.MiddleName ?? "") + " " + t.Receiver.LastName).Trim() +
+                    ", remarks: " + t.Remarks
+            })
+            .ToListAsync();
+
+        // Combine All
+        return orders
             .Concat(payouts)
             .Concat(withdrawals)
+            .Concat(transfers)
             .OrderByDescending(t => t.Date)
             .ToList();
-
-        return allTransactions;
     }
+
+
+
+
     public async Task<IEnumerable<CommissionPayoutDto>> GetCommissionPayoutsByDistributorAsync(string userId, DateTime? from, DateTime? to, string? status)
     {
         var query = _context.CommissionPayouts
@@ -510,8 +669,8 @@ public class ReportRepository : IReportRepository
         return await query.Select(p => new CommissionPayoutDto
         {
             Id = p.Id,
-            DistributorId = p.UserId,
-            DistributorName = p.User.FullName,
+            DistributorId = p.Id == 0 ? p.UserId : p.UserId, // unchanged, explicit
+            DistributorName = (p.User.FirstName + " " + (p.User.MiddleName ?? "") + " " + p.User.LastName).Trim(),
             DistributorEmail = p.User.Email!,
             Amount = p.Amount,
             PayoutDate = p.PayoutDate,
@@ -522,7 +681,9 @@ public class ReportRepository : IReportRepository
 
     public async Task<CommissionPayoutSummaryDto> GetCommissionPayoutSummaryByDistributorAsync(string userId, DateTime? from, DateTime? to)
     {
-        var query = _context.CommissionPayouts.Where(p => p.UserId == userId);
+        var query = _context.CommissionPayouts
+            .Include(u => u.User)
+            .Where(p => p.UserId == userId);
 
         if (from.HasValue) query = query.Where(p => p.PayoutDate >= from);
         if (to.HasValue) query = query.Where(p => p.PayoutDate <= to);
@@ -532,7 +693,7 @@ public class ReportRepository : IReportRepository
         return new CommissionPayoutSummaryDto
         {
             DistributorId = userId,
-            DistributorName = payouts.FirstOrDefault()?.User.FullName!,
+            DistributorName = BuildFullName(payouts.FirstOrDefault()?.User.FirstName, payouts.FirstOrDefault()?.User.MiddleName, payouts.FirstOrDefault()?.User.LastName),
             DistributorEmail = payouts.FirstOrDefault()?.User.Email!,
             TotalPaid = payouts.Where(p => p.Status == "Paid").Sum(p => p.Amount),
             TotalPending = payouts.Where(p => p.Status == "Pending").Sum(p => p.Amount),
@@ -553,7 +714,7 @@ public class ReportRepository : IReportRepository
         {
             Id = w.Id,
             DistributorId = w.UserId,
-            DistributorName = w.User.FullName,
+            DistributorName = (w.User.FirstName + " " + (w.User.MiddleName ?? "") + " " + w.User.LastName).Trim(),
             DistributorEmail = w.User.Email!,
             Amount = w.Amount,
             RequestDate = w.RequestDate,
@@ -574,7 +735,7 @@ public class ReportRepository : IReportRepository
         {
             Id = w.Id,
             DistributorId = w.UserId,
-            DistributorName = w.User.FullName!,
+            DistributorName = (w.User.FirstName + " " + (w.User.MiddleName ?? "") + " " + w.User.LastName).Trim(),
             DistributorEmail = w.User.Email!,
             Amount = w.Amount,
             RequestDate = w.RequestDate,
@@ -584,7 +745,46 @@ public class ReportRepository : IReportRepository
         }).ToListAsync();
     }
 
+    public async Task<TotalSalesDto?> GetTotalSalesByDistributorAsync(string distributorId, DateTime? from = null, DateTime? to = null)
+    {
+        var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == distributorId);
+        if (user == null) return null;
 
+        var allUsers = await _context.Users.ToListAsync();
 
+        // Step 1: Collect downline user IDs (recursively)
+        var downlineIds = new List<string>();
+        void CollectDownlines(string id)
+        {
+            var children = allUsers.Where(u => u.ParentId == id).ToList();
+            foreach (var child in children)
+            {
+                downlineIds.Add(child.Id);
+                CollectDownlines(child.Id);
+            }
+        }
+        CollectDownlines(distributorId);
 
+        // Step 2: Personal sales
+        var personalSalesQuery = _context.Orders.Where(o => o.UserId == distributorId);
+        if (from.HasValue) personalSalesQuery = personalSalesQuery.Where(o => o.OrderDate >= from.Value);
+        if (to.HasValue) personalSalesQuery = personalSalesQuery.Where(o => o.OrderDate <= to.Value);
+        var personalSales = await personalSalesQuery.SumAsync(o => (decimal?)o.TotalAmount) ?? 0;
+
+        // Step 3: Team sales
+        var teamSalesQuery = _context.Orders.Where(o => downlineIds.Contains(o.UserId));
+        if (from.HasValue) teamSalesQuery = teamSalesQuery.Where(o => o.OrderDate >= from.Value);
+        if (to.HasValue) teamSalesQuery = teamSalesQuery.Where(o => o.OrderDate <= to.Value);
+        var teamSales = await teamSalesQuery.SumAsync(o => (decimal?)o.TotalAmount) ?? 0;
+
+        // Step 4: Return combined DTO
+        return new TotalSalesDto
+        {
+            DistributorId = distributorId,
+            DistributorName = BuildFullName(user.FirstName, user.MiddleName, user.LastName),
+            DistributorEmail = user.Email!,
+            PersonalSales = personalSales,
+            TeamSales = teamSales
+        };
+    }
 }

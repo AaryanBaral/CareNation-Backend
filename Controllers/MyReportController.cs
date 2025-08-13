@@ -1,10 +1,12 @@
+using System.Security.Claims;
+using backend.Dto;
 using backend.Interface.Service;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using System.Security.Claims;
 
+[Authorize(Policy = "SensitiveAction")]
 [ApiController]
-[Authorize(Roles = "Distributor")]
+[Authorize(AuthenticationSchemes = "Bearer")]
 [Route("api/my-reports")]
 public class MyReportsController : ControllerBase
 {
@@ -15,7 +17,7 @@ public class MyReportsController : ControllerBase
         _service = service;
     }
 
-    private string GetUserId() => (User.FindFirst("Id")?.Value) ?? throw new UnauthorizedAccessException("Please login to Viwe Reports");
+    private string GetUserId() => (User.FindFirstValue(ClaimTypes.NameIdentifier)) ?? throw new UnauthorizedAccessException("Please login to Viwe Reports");
 
     [HttpGet("personal-earnings")]
     public async Task<IActionResult> GetMyPersonalEarnings([FromQuery] DateTime? from, [FromQuery] DateTime? to)
@@ -64,6 +66,19 @@ public class MyReportsController : ControllerBase
     {
         var userId = GetUserId();
         var result = await _service.GetFullTransactionalReportAsync(userId, from, to);
+        return Ok(result);
+    }
+    [HttpGet("team-sales-by-time")]
+    public async Task<ActionResult<List<SalesByTimeDto>>> GetMyTeamSalesByTime(
+    [FromQuery] DateTime? from = null,
+    [FromQuery] DateTime? to = null,
+    [FromQuery] string period = "day")
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(userId))
+            return Unauthorized("Login required");
+
+        var result = await _service.GetSalesByTimeForDistributorAsync(userId, from, to, period);
         return Ok(result);
     }
 }

@@ -29,4 +29,13 @@ namespace backend.Dto
         public int Quantity { get; set; }
         public decimal Price { get; set; }
     }
+    public class TotalSalesDto
+{
+    public string DistributorId { get; set; } = string.Empty;
+    public string DistributorName { get; set; } = string.Empty;
+    public string DistributorEmail { get; set; } = string.Empty;
+    public decimal PersonalSales { get; set; }
+    public decimal TeamSales { get; set; }
+}
+
 }

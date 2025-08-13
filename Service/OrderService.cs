@@ -48,39 +48,77 @@ public class OrderService : IOrderService
             {
                 ProductId = item.ProductId,
                 Quantity = item.Quantity,
-                Price = product.Price,
+                Price = product.RetailPrice,
             };
 
             order.Items.Add(orderItem);
-            total += item.Quantity * product.Price;
+            total += item.Quantity * product.RetailPrice;
         }
 
         order.TotalAmount = total;
 
-        var distributor = await _distributorRepository.GetDistributorByIdAsync(userId);
-        if (distributor is not null)
-        {
-            var comission = total * (decimal)0.1;
-            await _distributorRepository.Addcommitsion(comission, distributor.ReferalId!);
-        }
-
-
         await _orderRepo.CreateOrderAsync(order);
         await _cartRepo.ClearCartAsync(userId);
-        await _distributorRepository.ProcessCommissionOnSaleAsync(userId, order.TotalAmount);
 
         return order.Id;
     }
-        public async Task<List<OrderReadDto>> SearchOrdersAsync(
-        string? userId = null,
-        OrderStatus status = OrderStatus.Pending,
-        bool highestSaleOnly = false,
-        DateTime? from = null,
-        DateTime? to = null,
-        int skip = 0,
-        int take = 20)
+    public async Task<List<OrderReadDto>> SearchOrdersAsync(
+    string? userId = null,
+    OrderStatus status = OrderStatus.Pending,
+    bool highestSaleOnly = false,
+    DateTime? from = null,
+    DateTime? to = null,
+    int skip = 0,
+    int take = 20)
     {
         var orders = await _orderRepo.SearchOrdersAsync(userId, status, highestSaleOnly, from, to, skip, take);
         return [.. orders.Select(o => o.ToDto())];
+    }
+
+    public async Task<Order?> GetOrderByIdAsync(int orderId)
+    {
+        return await _orderRepo.GetOrderByIdAsync(orderId);
+    }
+
+    public async Task<List<Order>> GetOrdersByUserIdAsync(string userId)
+    {
+        return await _orderRepo.GetOrdersByUserIdAsync(userId);
+    }
+
+    public async Task<bool> DeleteOrderAsync(int orderId)
+    {
+        return await _orderRepo.DeleteOrderAsync(orderId);
+    }
+
+    public async Task<bool> ApproveOrderAsync(int orderId)
+    {
+        await _orderRepo.ApproveOrderAsync(orderId);
+        var order = await _orderRepo.GetOrderByIdAsync(orderId);
+        if (order == null) return false;
+
+        var userId = order.UserId;
+        // Process commission for the distributor
+        await _distributorRepository.ProcessCommissionOnSaleAsync(userId, order.TotalAmount);
+        return true;
+    }
+
+    public async Task<bool> RejectOrderAsync(int orderId)
+    {
+        return await _orderRepo.RejectOrderAsync(orderId);
+    }
+
+    public async Task<List<Order>> GetAllOrdersAsync()
+    {
+        return await _orderRepo.GetAllOrdersAsync();
+    }
+
+    public async Task<int> GetTotalOrdersCountAsync()
+    {
+        return await _orderRepo.GetTotalOrdersCountAsync();
+    }
+
+    public async Task<List<Order>> GetOrdersByStatusAsync(OrderStatus status)
+    {
+        return await _orderRepo.GetOrdersByStatusAsync(status);
     }
 }

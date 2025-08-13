@@ -1,8 +1,6 @@
 using backend.Dto;
 using backend.Models;
 
-namespace backend.Mapper;
-
 public static class OrderMapper
 {
     public static OrderReadDto ToDto(this Order order)
@@ -14,14 +12,16 @@ public static class OrderMapper
             OrderDate = order.OrderDate,
             TotalAmount = order.TotalAmount,
             Status = order.Status.ToString(),
-            Items = order.Items.Select(i => new OrderItemReadDto
-            {
-                Id= i.Id,
-                ProductName = i.Product.Title,
-                OrderId = order.Id,
-                Quantity = i.Quantity,
-                Price = i.Price
-            }).ToList()
+            Items = (order.Items ?? new List<OrderItem>())
+                .Select(i => new OrderItemReadDto
+                {
+                    Id = i.Id,
+                    ProductName = i.Product?.Title ?? "(unknown product)",
+                    OrderId = order.Id,
+                    Quantity = i.Quantity,
+                    Price = i.Price
+                })
+                .ToList()
         };
     }
 }

@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using backend.Dto;
 using backend.Interface.Service;
 using Microsoft.AspNetCore.Authorization;
@@ -35,7 +36,7 @@ namespace backend.Controllers
         [HttpGet("my-profile")]
         public async Task<ActionResult<SuccessResponseDto<UserReadDto>>> GetById()
         {
-             var userId = User.FindFirst("Id")?.Value
+             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)
                     ?? throw new UnauthorizedAccessException("Login required");
             var user = await _userService.GetById(userId);
             if (user == null) return NotFound();

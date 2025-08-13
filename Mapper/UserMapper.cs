@@ -7,12 +7,13 @@ namespace backend.Mapper
     {
         public static User ToUser(this UserSignUpDto dto)
         {
-            
             return new User
             {
-                FullName = dto.FullName,
+                FirstName = dto.FirstName,
+                MiddleName = dto.MiddleName,
+                LastName = dto.LastName,
                 Email = dto.Email,
-                Address = dto.Address,
+                PermanentFullAddress = dto.PermanentFullAddress,
                 UserName = dto.Email.Split('@')[0],
                 PhoneNumber = dto.PhoneNumber
             };
@@ -23,20 +24,23 @@ namespace backend.Mapper
             return new UserReadDto
             {
                 Id = user.Id,
-                FullName = user.FullName!,
+                FirstName = user.FirstName!,
+                MiddleName = user.MiddleName,
+                LastName = user.LastName!,
                 Email = user.Email!,
                 Role = role,
-                Address = user.Address,
+                PermanentFullAddress = user.PermanentFullAddress!,
                 PhoneNumber = user.PhoneNumber!
-
             };
         }
 
         public static void UpdateUser(this User user, UserReadDto dto)
         {
-            user.FullName = dto.FullName;
+            user.FirstName = dto.FirstName;
+            user.MiddleName = dto.MiddleName;
+            user.LastName = dto.LastName;
             user.Email = dto.Email;
-            user.Address = dto.Address;
+            user.PermanentFullAddress = dto.PermanentFullAddress;
         }
     }
 }

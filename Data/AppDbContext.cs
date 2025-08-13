@@ -9,11 +9,20 @@ namespace backend.Data
             public DbSet<Category> Categories { get; set; }
             public DbSet<Product> Products { get; set; }
             public DbSet<ProductImage> ProductImages { get; set; }
+            public DbSet<BalanceTransfer> BalanceTransfers { get; set; }
+            public DbSet<Vendor> Vendors { get; set; }
             public DbSet<Order> Orders { get; set; }
+            // Data/AppDbContext.cs (or your context)
+            public DbSet<ImpersonationTicket> ImpersonationTickets { get; set; } = default!;
+
+            public DbSet<SystemCounter> SystemCounters { get; set; } = default!;
             public DbSet<OrderItem> OrderItems { get; set; }
             public DbSet<WithdrawalRequest> WithdrawalRequests { get; set; }
             public DbSet<CommissionPayout> CommissionPayouts { get; set; }
             public DbSet<Cart> Carts { get; set; }
+            public DbSet<FundContribution> FundContributions { get; set; }
+            public DbSet<TeamSalesProgress> TeamSalesProgresses { get; set; }
+            public DbSet<RewardPayout> RewardPayouts { get; set; }
 
             protected override void OnModelCreating(ModelBuilder modelBuilder)
             {
@@ -29,6 +38,114 @@ namespace backend.Data
                         .HasMaxLength(100)
                         .HasColumnType("varchar(100)");
             });
+                  // ----- FundContribution -----
+                  modelBuilder.Entity<FundContribution>(e =>
+                  {
+                        e.ToTable("FundContributions");
+                        e.HasKey(x => x.Id);
+
+                        e.Property(x => x.UserId)
+                  .IsRequired();
+
+                        // By default enums are stored as ints; if you prefer string, uncomment the next line:
+                        // e.Property(x => x.Type).HasConversion<string>().HasMaxLength(32);
+
+                        e.Property(x => x.Amount)
+                  .HasColumnType("decimal(18,2)")
+                  .IsRequired();
+
+                        e.Property(x => x.ContributionDate)
+                  .IsRequired();
+
+                        e.Property(x => x.Remarks)
+                  .HasMaxLength(512);
+
+                        e.HasOne(x => x.User)
+                  .WithMany()                 // or .WithMany(u => u.FundContributions) if you add a nav on User
+                  .HasForeignKey(x => x.UserId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+                        e.HasIndex(x => new { x.UserId, x.ContributionDate });
+                        e.HasIndex(x => new { x.UserId, x.Type, x.ContributionDate });
+                  });
+                  modelBuilder.Entity<SystemCounter>(e =>
+{
+      e.HasKey(x => x.Name);
+      e.Property(x => x.NextValue).IsRequired();
+});
+
+                  // ----- TeamSalesProgress -----
+                  modelBuilder.Entity<TeamSalesProgress>(e =>
+                  {
+                        e.ToTable("TeamSalesProgress");
+                        // one row per user
+                        e.HasKey(x => x.UserId);
+
+                        e.Property(x => x.LeftTeamSales)
+                  .HasColumnType("decimal(18,2)")
+                  .HasDefaultValue(0);
+
+                        e.Property(x => x.RightTeamSales)
+                  .HasColumnType("decimal(18,2)")
+                  .HasDefaultValue(0);
+
+                        e.Property(x => x.MatchedVolumeConsumed)
+                  .HasColumnType("decimal(18,2)")
+                  .HasDefaultValue(0);
+
+                        e.HasOne<User>()
+                  .WithMany()
+                  .HasForeignKey(x => x.UserId)
+                  .OnDelete(DeleteBehavior.Cascade);
+                  });
+
+                  // ----- RewardPayout -----
+                  modelBuilder.Entity<RewardPayout>(e =>
+                  {
+                        e.ToTable("RewardPayouts");
+                        e.HasKey(x => x.Id);
+
+                        e.Property(x => x.UserId)
+                  .IsRequired();
+
+                        e.Property(x => x.PayoutDate)
+                  .IsRequired();
+
+                        e.Property(x => x.MilestoneAmount)
+                  .HasColumnType("decimal(18,2)")
+                  .IsRequired();
+
+                        e.Property(x => x.RankLabel)
+                  .HasMaxLength(64)
+                  .IsRequired();
+
+                        e.Property(x => x.RewardItem)
+                  .HasMaxLength(128);
+
+                        e.Property(x => x.RoyaltyAmount)
+                  .HasColumnType("decimal(18,2)")
+                  .HasDefaultValue(0);
+
+                        e.Property(x => x.TravelFundAmount)
+                  .HasColumnType("decimal(18,2)")
+                  .HasDefaultValue(0);
+
+                        e.Property(x => x.CarFundAmount)
+                  .HasColumnType("decimal(18,2)")
+                  .HasDefaultValue(0);
+
+                        e.Property(x => x.HouseFundAmount)
+                  .HasColumnType("decimal(18,2)")
+                  .HasDefaultValue(0);
+
+                        e.HasOne<User>()
+                  .WithMany()
+                  .HasForeignKey(x => x.UserId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+                        e.HasIndex(x => new { x.UserId, x.PayoutDate });
+                        e.HasIndex(x => new { x.UserId, x.MilestoneAmount }).HasDatabaseName("IX_Reward_MilestoneOnce");
+                  });
 
                   // Product Table
                   modelBuilder.Entity<Product>(entity =>
@@ -44,8 +161,7 @@ namespace backend.Data
                         entity.Property(e => e.Description)
                         .HasColumnType("text");  // Changed from NVARCHAR(MAX)
 
-                        entity.Property(e => e.Price)
-                        .HasColumnType("decimal(10,2)");
+
 
 
                         entity.HasOne<Category>()
@@ -158,6 +274,19 @@ namespace backend.Data
                         // Optional: limit length of remarks for DB storage efficiency
                         entity.Property(cp => cp.Remarks).HasMaxLength(255);
                   });
+
+
+                  modelBuilder.Entity<BalanceTransfer>()
+                      .HasOne(t => t.Sender)
+                      .WithMany()
+                      .HasForeignKey(t => t.SenderId)
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                  modelBuilder.Entity<BalanceTransfer>()
+                      .HasOne(t => t.Receiver)
+                      .WithMany()
+                      .HasForeignKey(t => t.ReceiverId)
+                      .OnDelete(DeleteBehavior.Restrict);
 
             }
       }

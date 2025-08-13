@@ -56,6 +56,14 @@ public class ReportService : IReportService
 
     public async Task<IEnumerable<WithdrawalTransactionDto>> GetWithdrawalTransactionsByDistributorAsync(string userId, DateTime? from, DateTime? to)
         => await _repo.GetWithdrawalTransactionsByDistributorAsync(userId, from, to);
+    public async Task<TotalSalesDto?> GetTotalSalesByDistributorAsync(string distributorId, DateTime? from = null, DateTime? to = null)
+    {
+        return await _repo.GetTotalSalesByDistributorAsync(distributorId, from, to);
+    }
+        public async Task<List<SalesByTimeDto>> GetSalesByTimeForDistributorAsync(string distributorId, DateTime? from, DateTime? to, string period)
+    {
+        return await _repo.GetSalesByTimeForDistributorAsync(distributorId, from, to, period);
+    }
 
         
 
