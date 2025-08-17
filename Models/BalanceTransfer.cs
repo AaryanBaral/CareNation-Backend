@@ -9,7 +9,7 @@ public class BalanceTransfer
 
     public string ReceiverId { get; set; } = string.Empty;
     public User Receiver { get; set; }= null!;
-
+    public bool IsDeleted { get; set; }
     public decimal Amount { get; set; }
     public DateTime TransferDate { get; set; } = DateTime.UtcNow;
     public string? Remarks { get; set; }

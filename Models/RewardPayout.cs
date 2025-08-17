@@ -13,4 +13,5 @@ public class RewardPayout
     public decimal TravelFundAmount { get; set; }     // contributed to fund
     public decimal CarFundAmount { get; set; }
     public decimal HouseFundAmount { get; set; }
+        public bool IsDeleted { get; set; }
 }

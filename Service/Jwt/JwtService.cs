@@ -2,40 +2,41 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
-using backend.Configurations;
+using System.Threading.Tasks;
 using backend.Interface.Service;
 using backend.Models;
-using Microsoft.Extensions.Options;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.IdentityModel.Tokens;
 
 namespace backend.Service.Jwt
 {
 
 
-   public class TokenService : ITokenService
+    public class TokenService(UserManager<User> userManager, IConfiguration cfg) : ITokenService
     {
-        private readonly IConfiguration _cfg;
-        public TokenService(IConfiguration cfg) => _cfg = cfg;
+        private readonly IConfiguration _cfg = cfg;
+        private UserManager<User> _userManager = userManager;
 
-        public TokenPair CreateAccessToken(
+        public async Task<TokenPair> CreateAccessToken(
             User user,
             IEnumerable<Claim>? extraClaims = null,
             bool isImpersonation = false,
-            IEnumerable<string>? roles = null)
+            IList<string>? roles = null)
         {
             // ---- Config
-            var issuer   = _cfg["Jwt:Issuer"];
+            var issuer = _cfg["Jwt:Issuer"];
             var audience = _cfg["Jwt:Audience"];
             var keyBytes = Encoding.UTF8.GetBytes(_cfg["Jwt:Key"] ?? throw new InvalidOperationException("Jwt:Key missing"));
-            var key      = new SymmetricSecurityKey(keyBytes);
+            var key = new SymmetricSecurityKey(keyBytes);
 
             var minutes = isImpersonation
                 ? int.Parse(_cfg["Jwt:ImpersonationMinutes"] ?? "45")
-                : int.Parse(_cfg["Jwt:AccessTokenMinutes"] ?? "60");
+                : int.Parse(_cfg["Jwt:AccessTokenMinutes"] ?? "6000");
 
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-            var now   = DateTime.UtcNow;
-            var iat   = new DateTimeOffset(now).ToUnixTimeSeconds().ToString();
+            var now = DateTime.UtcNow;
+            var iat = new DateTimeOffset(now).ToUnixTimeSeconds().ToString();
+            roles = await _userManager.GetRolesAsync(user);
 
             // ---- Base claims
             var claims = new List<Claim>
@@ -48,6 +49,7 @@ namespace backend.Service.Jwt
                 new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
                 new(JwtRegisteredClaimNames.Iat, iat, ClaimValueTypes.Integer64)
             };
+            claims.AddRange(roles.Select(r => new Claim(ClaimTypes.Role, r)));
 
             // ---- Roles (both standard and "role")
             if (roles != null)

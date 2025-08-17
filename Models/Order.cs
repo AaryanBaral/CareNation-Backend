@@ -1,7 +1,7 @@
 namespace backend.Models;
 
 public enum OrderStatus {
-    Canceled,
+    Cancelled,
     Delivered,
     Pending
 }
@@ -14,4 +14,7 @@ public class Order
     public List<OrderItem> Items { get; set; } = new();
     public decimal TotalAmount { get; set; }
     public OrderStatus Status { get; set; } = OrderStatus.Pending;
+    public bool IsDeleted { get; set; }
+                public bool IsRepurchase { get; set; }          // “true” if buyer had any prior Delivered order
+        public decimal TotalPV { get; set; }   
 }

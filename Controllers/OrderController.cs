@@ -36,7 +36,7 @@ public class OrderController : ControllerBase
         var order = await _orderService.GetOrderByIdAsync(orderId)
             ?? throw new KeyNotFoundException("Order not found.");
 
-        return Ok(new SuccessResponseDto<Order?> { Data = order });
+        return Ok(new SuccessResponseDto<OrderReadDto?> { Data = order });
     }
 
     // GET api/order/my
@@ -47,7 +47,7 @@ public class OrderController : ControllerBase
             ?? throw new UnauthorizedAccessException("Login required");
 
         var orders = await _orderService.GetOrdersByUserIdAsync(userId);
-        return Ok(new SuccessResponseDto<List<Order>> { Data = orders });
+        return Ok(new SuccessResponseDto<List<OrderReadDto>> { Data = orders });
     }
 
     // DELETE api/order/{orderId}
@@ -101,7 +101,7 @@ public class OrderController : ControllerBase
     public async Task<ActionResult<SuccessResponseDto<List<Order>>>> GetAll()
     {
         var orders = await _orderService.GetAllOrdersAsync();
-        return Ok(new SuccessResponseDto<List<Order>> { Data = orders });
+        return Ok(new SuccessResponseDto<List<OrderReadDto>> { Data = orders });
     }
 
     // GET api/order/count
@@ -118,6 +118,6 @@ public class OrderController : ControllerBase
     public async Task<ActionResult<SuccessResponseDto<List<Order>>>> GetByStatus([FromRoute] OrderStatus status)
     {
         var orders = await _orderService.GetOrdersByStatusAsync(status);
-        return Ok(new SuccessResponseDto<List<Order>> { Data = orders });
+        return Ok(new SuccessResponseDto<List<OrderReadDto>> { Data = orders });
     }
 }

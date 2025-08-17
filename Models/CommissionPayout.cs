@@ -8,4 +8,5 @@ public class CommissionPayout
     public DateTime PayoutDate { get; set; } = DateTime.UtcNow;
     public string Status { get; set; } = "Pending"; // Pending, Paid, Failed, etc.
     public string? Remarks { get; set; }
+        public bool IsDeleted { get; set; }
 }

@@ -5,7 +5,7 @@ using backend.Mapper;
 using backend.Models;
 using backend.Service.Jwt;
 using Microsoft.AspNetCore.Identity;
-using System.Linq;
+using Microsoft.EntityFrameworkCore;
 
 namespace backend.Service
 {
@@ -15,17 +15,30 @@ namespace backend.Service
         private readonly IUserRepository _userRepository;
         private readonly ITokenService _jwtService;
         private readonly UserManager<User> _userManager;
+            private readonly IFileStorageService _fileStorage;
 
         public DistributorService(
             IDistributorRepository distributorRepo,
             IUserRepository userRepository,
             ITokenService jwtService,
-            UserManager<User> userManager)
+            UserManager<User> userManager,
+            IFileStorageService fileStorage)
         {
             _distributorRepo = distributorRepo;
             _userRepository = userRepository;
             _jwtService = jwtService;
             _userManager = userManager;
+            _fileStorage = fileStorage;
+        }
+
+        private static string BuildFullName(User u)
+        {
+            var parts = new[] { u.FirstName, u.MiddleName, u.LastName }
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .Select(s => s!.Trim());
+            var name = string.Join(" ", parts);
+            if (!string.IsNullOrWhiteSpace(name)) return name;
+            return u.UserName ?? u.Email ?? "User";
         }
 
         public async Task<bool> CanBecomeDistributorAsync(string userId)
@@ -36,9 +49,7 @@ namespace backend.Service
         public async Task<DistributorReadDto?> GetDistributorByIdAsync(string id)
         {
             var user = await _distributorRepo.GetDistributorByIdAsync(id);
-            if (user == null)
-                return null;
-
+            if (user == null) return null;
             return user.ToDistributorReadDto("Distributor");
         }
 
@@ -49,15 +60,18 @@ namespace backend.Service
             return [.. users.Select(u => new DownlineUserDto
             {
                 Id = u.Id,
-                // Build FullName from split parts
-                FullName = BuildFullName(u.FirstName, u.MiddleName, u.LastName),
+                // was: FullName = u.FullName,
+                FullName = BuildFullName(u),
                 Email = u.Email,
                 PhoneNumber = u.PhoneNumber,
                 ParentId = u.ParentId,
-                Position = u.Position?.ToString() ?? string.Empty,
+                Position = u.Position.ToString() ?? "",
                 LeftWallet = u.LeftWallet,
                 RightWallet = u.RightWallet,
-                Rank = u.Rank.ToString()
+                // keep Rank as-is if your model has it; otherwise switch to Type
+                Rank = u.Rank.ToString()!
+                // If your model uses Type instead of Rank, use:
+                // Rank = u.Type.ToString()
             })];
         }
 
@@ -67,25 +81,60 @@ namespace backend.Service
             return users.Select(u => u.ToDistributorReadDto("Distributor")).ToList();
         }
 
-        public async Task<bool> SignUpDistributorAsync(
-            string userId,
-            DistributorSignUpDto dto,
-            IFormFile citizenshipFile,
-            IFormFile? profilePicture = null)
+public async Task<bool> SignUpDistributorAsync(
+        string userId,
+        DistributorSignUpDto dto,
+        IFormFile citizenshipFile,
+        IFormFile? profilePicture = null)
+    {
+        if (!await CanBecomeDistributorAsync(userId))
+            throw new ArgumentException("User has not purchased goods worth more than 5000.");
+
+        _ = await _distributorRepo.GetDistributorByIdAsync(dto.ReferalId)
+            ?? throw new KeyNotFoundException("Referal Id invalid");
+
+        var user = await _userRepository.GetUserById(userId)
+            ?? throw new KeyNotFoundException("User not found.");
+
+        // Map the rest of distributor fields
+        user = dto.ToUser(user);
+
+        // Upload files → set URLs on user before saving
+        string? citizenUrl = null;
+        string? profileUrl = null;
+
+        try
         {
-            if (!await CanBecomeDistributorAsync(userId))
-                throw new ArgumentException("User has not purchased goods worth more than 5000.");
+            if (citizenshipFile == null || citizenshipFile.Length == 0)
+                throw new ArgumentException("Citizenship image is required.");
 
-            _ = await _distributorRepo.GetDistributorByIdAsync(dto.ReferalId)
-                ?? throw new KeyNotFoundException("Referal Id invalid");
+            citizenUrl = await _fileStorage.UploadAsync(citizenshipFile, $"citizenship/{user.Id ?? userId}");
+            user.CitizenshipImageUrl = citizenUrl;
 
-            var user = await _userRepository.GetUserById(userId)
-                ?? throw new KeyNotFoundException("User not found.");
+            if (profilePicture is { Length: > 0 })
+            {
+                profileUrl = await _fileStorage.UploadAsync(profilePicture, $"profile/{user.Id ?? userId}");
+                user.ProfilePictureUrl = profileUrl;
+            }
 
-            user = dto.ToUser(user);
-
-            return await _distributorRepo.SignUpDistributorAsync(user);
+            // Persist everything (including the image URLs)
+            var ok = await _distributorRepo.SignUpDistributorAsync(user);
+            if (!ok)
+            {
+                // rollback uploaded files if save fails
+                if (!string.IsNullOrWhiteSpace(profileUrl)) await _fileStorage.DeleteByUrlAsync(profileUrl);
+                if (!string.IsNullOrWhiteSpace(citizenUrl)) await _fileStorage.DeleteByUrlAsync(citizenUrl);
+            }
+            return ok;
         }
+        catch
+        {
+            // rollback on any exception too
+            if (!string.IsNullOrWhiteSpace(profileUrl)) await _fileStorage.DeleteByUrlAsync(profileUrl);
+            if (!string.IsNullOrWhiteSpace(citizenUrl)) await _fileStorage.DeleteByUrlAsync(citizenUrl);
+            throw;
+        }
+    }
 
         public async Task ChangeParentAsync(string userId, string newParentId, string childId)
         {
@@ -123,14 +172,13 @@ namespace backend.Service
             var user = await _distributorRepo.LoginDistributorAsync(dto.Email, dto.Password)
                 ?? throw new InvalidOperationException("Invalid Credentials");
 
-            var distributortor = await _distributorRepo.GetDistributorByIdAsync(user.Id);
-            Console.WriteLine(distributortor);
+            var distributor = await _distributorRepo.GetDistributorByIdAsync(user.Id);
+            var token = await _jwtService.CreateAccessToken(user);
 
-            var token = _jwtService.CreateAccessToken(user);
-            return new DistributorLoginResponse()
+            return new DistributorLoginResponse
             {
                 Token = token.AccessToken,
-                IsDistributor = distributortor != null
+                IsDistributor = distributor != null
             };
         }
 
@@ -138,7 +186,7 @@ namespace backend.Service
         {
             var downlines = await _distributorRepo.GetMyDownlineAsync(userId);
             return downlines?.Count ?? 0;
-            }
+        }
 
         public async Task<List<UserReadDto>> GetPeoplesBelowMe(string userId)
         {
@@ -186,21 +234,43 @@ namespace backend.Service
             return dtoList;
         }
 
+        public async Task<User?> GetUserByIdAsync(string userId)
+        {
+            return await _userManager.Users.FirstOrDefaultAsync(u => u.Id == userId);
+        }
+
+        // Persist via UserManager (no DbContext in this service)
+        public async Task UpdateProfilePictureUrlAsync(string userId, string? imageUrl)
+        {
+            var user = await GetUserByIdAsync(userId) ?? throw new KeyNotFoundException("User not found.");
+            user.ProfilePictureUrl = imageUrl;
+
+            var result = await _userManager.UpdateAsync(user);
+            if (!result.Succeeded)
+            {
+                var errors = string.Join("; ", result.Errors.Select(e => $"{e.Code}: {e.Description}"));
+                throw new InvalidOperationException($"Failed to update profile picture URL. {errors}");
+            }
+        }
+
+        public async Task UpdateCitizenshipImageUrlAsync(string userId, string? imageUrl)
+        {
+            var user = await GetUserByIdAsync(userId) ?? throw new KeyNotFoundException("User not found.");
+            user.CitizenshipImageUrl = imageUrl;
+
+            var result = await _userManager.UpdateAsync(user);
+            if (!result.Succeeded)
+            {
+                var errors = string.Join("; ", result.Errors.Select(e => $"{e.Code}: {e.Description}"));
+                throw new InvalidOperationException($"Failed to update citizenship image URL. {errors}");
+            }
+        }
+
         public async Task<WalletStatementDto> GetWalletStatementAsync(string userId)
         {
             var statement = await _distributorRepo.GetWalletStatementAsync(userId)
                 ?? throw new KeyNotFoundException("Wallet statement not found for user.");
             return statement;
         }
-
-        // --------- helpers ---------
-        private static string BuildFullName(string? first, string? middle, string? last)
-        {
-            var parts = new[] { first, middle, last }
-                .Where(s => !string.IsNullOrWhiteSpace(s))
-                .Select(s => s!.Trim());
-            return string.Join(" ", parts);
-        }
     }
 }
- 

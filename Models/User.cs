@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Identity;
 
+
 namespace backend.Models
 {
     public enum NodePosition
@@ -8,7 +9,7 @@ namespace backend.Models
         Right
     }
 
-    public enum Rank
+    public enum UserType
     {
         None,
         Beginner,
@@ -18,14 +19,29 @@ namespace backend.Models
         Nation
     }
 
+    public enum Rank
+    {
+        None,
+        Executive,
+        Rising,
+        Silver,
+        Gold,
+        Star,
+        Pearl,
+        Diamond,
+        Crown,
+        GlobalDirector
+    }
+
     public class User : IdentityUser
     {
         // MLM Hierarchy
-        public string? ReferalId { get; set; }  // Previously WitnessId
-        public string? ParentId { get; set; }   // Previously LocationId
+        public string? ReferalId { get; set; }
+        public string? ParentId { get; set; }
 
         // Profile Information
         public string? FirstName { get; set; }
+        public bool IsDeleted { get; set; }
         public string? MiddleName { get; set; }
         public string? LastName { get; set; }
         public string? Gender { get; set; }
@@ -36,8 +52,8 @@ namespace backend.Models
         public string? FatherOrSpouseLastName { get; set; }
 
         // Date of Birth
-        public string? DOB_BS { get; set; } // In BS format
-        public string? DOB_AD { get; set; } // In AD format
+        public string? DOB_BS { get; set; }
+        public string? DOB_AD { get; set; }
 
         // Citizenship / Passport
         public string? CitizenshipOrPassportNo { get; set; }
@@ -61,7 +77,7 @@ namespace backend.Models
         // Contact Information
         public string? PhoneNo { get; set; }
         public string? MobileNo { get; set; }
-        public string? EmailAddress { get; set; } // Duplicate of IdentityUser.Email but kept for form mapping
+        public string? EmailAddress { get; set; }
         public string? ProfilePictureUrl { get; set; }
 
         // Nominee Detail
@@ -81,15 +97,19 @@ namespace backend.Models
 
         // MLM Stats
         public NodePosition? Position { get; set; }
-        public Rank Rank { get; set; } = Rank.None;
+        public UserType Type { get; set; } = UserType.None;
+
+        public Rank? Rank { get; set; } // Distributor Rank (stored as string in DB)
+
         public decimal CommisionAmmount { get; set; } = 0;
         public decimal LeftWallet { get; set; } = 0;
         public decimal RightWallet { get; set; } = 0;
         public decimal TotalWallet { get; set; } = 0;
         public decimal TotalPoints { get; set; } = 0;
+
         public bool LeadershipBonusGiven { get; set; } = false;
         public bool RankBonusGiven { get; set; } = false;
-        public Rank LastRankAwarded { get; set; } = Rank.None;
+        public UserType LastRankAwarded { get; set; } = UserType.None;
 
         // Metadata
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

@@ -16,7 +16,7 @@ namespace backend.Controllers
         }
 
         [HttpPost]
-        public async Task<ActionResult<SuccessResponseDto<int>>> AddProduct([FromForm] CreateProductDto dto, [FromForm] List<IFormFile> images)
+        public async Task<ActionResult<SuccessResponseDto<int>>> AddProduct([FromForm]CreateProductDto dto, [FromForm] List<IFormFile> images)
         {
             if (images == null || images.Count == 0)
                 return BadRequest("At least one image is required.");

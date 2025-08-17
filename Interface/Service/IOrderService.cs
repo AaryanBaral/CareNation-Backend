@@ -7,7 +7,18 @@ namespace backend.Interface.Service
     public interface IOrderService
     {
         Task<int> PlaceOrderAsync(string userId);
+        Task<bool> ApproveOrderAsync(int orderId);
+        Task<bool> RejectOrderAsync(int orderId);
+        Task<bool> DeleteOrderAsync(int orderId);
 
+        // Queries (DTO-only)
+        Task<OrderReadDto?> GetOrderByIdAsync(int orderId);
+        Task<List<OrderReadDto>> GetOrdersByUserIdAsync(string userId);
+        Task<List<OrderReadDto>> GetAllOrdersAsync();
+        Task<List<OrderReadDto>> GetOrdersByStatusAsync(OrderStatus status);
+        Task<int> GetTotalOrdersCountAsync();
+
+        // Search (server-paged)
         Task<List<OrderReadDto>> SearchOrdersAsync(
             string? userId = null,
             OrderStatus status = OrderStatus.Pending,
@@ -17,21 +28,5 @@ namespace backend.Interface.Service
             int skip = 0,
             int take = 20
         );
-
-        Task<Order?> GetOrderByIdAsync(int orderId);
-
-        Task<List<Order>> GetOrdersByUserIdAsync(string userId);
-
-        Task<bool> DeleteOrderAsync(int orderId);
-
-        Task<bool> ApproveOrderAsync(int orderId);
-
-        Task<bool> RejectOrderAsync(int orderId);
-
-        Task<List<Order>> GetAllOrdersAsync();
-
-        Task<int> GetTotalOrdersCountAsync();
-
-        Task<List<Order>> GetOrdersByStatusAsync(OrderStatus status);
     }
 }

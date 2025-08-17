@@ -67,6 +67,7 @@ namespace backend.Extension
             service.AddScoped<IBalanceTransferRepository, BalanceTransferRepository>();
             service.AddScoped<IAdminRepository, AdminRepository>();
             service.AddScoped<IWithdrawalRequestRepository, WithdrawalRequestRepository>();
+            service.AddScoped<IVendorRepository, VendorRepository>();
         }
         public static void AddServices(this IServiceCollection service)
         {
@@ -86,6 +87,8 @@ namespace backend.Extension
             service.AddScoped<IAdminService, AdminService>();
             service.AddScoped<IUserIdGenerator, UserIdGenerator>();
             service.AddScoped<IWithdrawalRequestService, WithdrawalRequestService>();
+            service.AddScoped<IVendorService, VendorService>();
+            service.AddScoped<IFileStorageService, FileStorageService>();;
 
         }
 
@@ -115,6 +118,7 @@ namespace backend.Extension
     {
         o.TokenValidationParameters = new TokenValidationParameters
         {
+            
             IssuerSigningKey = new SymmetricSecurityKey(key),
             ValidateIssuerSigningKey = true,
             ValidateIssuer = false,  // set true + ValidIssuer if you want

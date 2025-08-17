@@ -8,12 +8,11 @@ namespace backend.Service.Jwt
 {
     public interface ITokenService
     {
-        TokenPair CreateAccessToken(
-            User user,
-            IEnumerable<Claim>? extraClaims = null,
-            bool isImpersonation = false,
-            IEnumerable<string>? roles = null
-        );
+        Task<TokenPair> CreateAccessToken(
+                    User user,
+                    IEnumerable<Claim>? extraClaims = null,
+                    bool isImpersonation = false,
+                    IList<string>? roles = null);
     }
 
 }

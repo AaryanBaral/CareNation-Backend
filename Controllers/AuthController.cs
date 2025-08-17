@@ -82,7 +82,7 @@ namespace backend.Controllers
                 new System.Security.Claims.Claim("acr", "impersonation")
             };
 
-            var tokens = _tokenService.CreateAccessToken(target, extraClaims, isImpersonation: true);
+            var tokens = await _tokenService.CreateAccessToken(target, extraClaims, isImpersonation: true);
 
             return Ok(new
             {
@@ -105,7 +105,7 @@ namespace backend.Controllers
             if (!valid) return Unauthorized();
 
             // New token pair with fresh auth_time
-            var tokens = _tokenService.CreateAccessToken(user);
+            var tokens = await _tokenService.CreateAccessToken(user);
 
             return Ok(new
             {

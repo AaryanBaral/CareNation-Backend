@@ -33,7 +33,7 @@ namespace backend.Service
         public async Task<string> Login(UserLoginDto dto)
         {
             var user = await _userRepo.Login(dto) ?? throw new AuthenticationFailureException("Invalid Credentials");
-            var token = _jwtService.CreateAccessToken(user);
+            var token = await _jwtService.CreateAccessToken(user);
             return token.AccessToken;
         }
 

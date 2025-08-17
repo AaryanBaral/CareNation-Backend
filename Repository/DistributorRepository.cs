@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using backend.Interface.Repository;
 using backend.Dto;
-using System.Linq;
+
 
 namespace backend.Repository
 {
@@ -34,197 +34,11 @@ namespace backend.Repository
             return u.UserName ?? u.Email ?? "User";
         }
 
-        // Mirrors your slide table
-        private sealed record RankRewardCfg(
-            string Rank, decimal Milestone, string RewardItem,
-            decimal? RoyaltyPct, decimal? TravelPct, decimal? CarPct, decimal? HousePct);
 
-        private static readonly RankRewardCfg[] _rankRewards =
-        {
-            new("Executive",       100000m,   "CNI Bag",          null,  null,  null,  null),
-            new("Rising",          300000m,   "Alkaline bottle",  null,  null,  null,  null),
-            new("Silver",          500000m,   "Suit/Sari",        0.16m, null,  null,  null),
-            new("Gold",            700000m,   "Bio Bracelet",     0.14m, 0.20m, null,  null),
-            new("Star",           1000000m,   "BMI Machine",      0.14m, 0.19m, 0.20m, null),
-            new("Pearl",          1500000m,   "Alkaline Filter",  0.14m, 0.18m, 0.20m, 0.25m),
-            new("Diamond",        2000000m,   "Bio Watch",        0.14m, 0.17m, 0.20m, 0.25m),
-            new("Crown",          4000000m,   "Laptop",           0.14m, 0.16m, 0.20m, 0.25m),
-            new("Global Director",10000000m,  "Cash 1 lakh",      0.14m, 0.10m, 0.20m, 0.25m),
-        };
 
-        private static readonly (decimal min, decimal max, Rank rank)[] _rankByPurchase =
-        {
-            (5000m,     15000m - 0.01m, Rank.Beginner), // 5,000 ≤ x < 15,000
-            (15000m,    30000m - 0.01m, Rank.Area),     // 15,000 ≤ x < 30,000
-            (30000m,    60000m - 0.01m, Rank.Zonal),    // 30,000 ≤ x < 60,000
-            (60000m,    100000m - 0.01m, Rank.Regional),// 60,000 ≤ x < 1,00,000
-            (100000m,   decimal.MaxValue, Rank.Nation), // ≥ 1,00,000
-        };
 
-        private static readonly Dictionary<Rank, decimal> _dailyCapByRank = new()
-        {
-            { Rank.Beginner, 12000m },
-            { Rank.Area,     24000m },
-            { Rank.Zonal,    36000m },
-            { Rank.Regional, 48000m },
-            { Rank.Nation,   60000m },
-            { Rank.None,         0m },
-        };
 
-        private static int GetAllowedRepurchaseLevels(Rank rank) => rank switch
-        {
-            Rank.Beginner => 3, // levels 0..2
-            Rank.Area => 4, // 0..3
-            Rank.Zonal => 5, // 0..4
-            Rank.Regional => 7, // 0..6
-            Rank.Nation => 11,// 0..10
-            _ => 0  // Rank.None: not eligible
-        };
 
-        private static readonly decimal[] RepurchasePercents = new decimal[]
-        {
-            0.10m, 0.08m, 0.06m, 0.05m, 0.04m, 0.03m, 0.02m, 0.01m, 0.01m, 0.01m, 0.01m
-        };
-
-        private async Task PayRepurchaseAsync(User receiver, int level, decimal baseAmount, string purchaserName)
-        {
-            var allowed = GetAllowedRepurchaseLevels(receiver.Rank);
-            if (level > allowed - 1) return;
-            if (level < 0 || level >= RepurchasePercents.Length) return;
-
-            var pct = RepurchasePercents[level];
-            if (pct <= 0m) return;
-
-            var bonus = Math.Round(baseAmount * pct, 2, MidpointRounding.AwayFromZero);
-            if (bonus <= 0m) return;
-
-            var reason = level == 0
-                ? "Repurchase Commission (Self)"
-                : $"Repurchase Commission L{level} from {purchaserName}";
-
-            await AddCommissionTransactionAsync(receiver, bonus, reason, purchaserName);
-            await AddWalletTransactionAsync(receiver, bonus, reason.Replace("Commission", "Wallet Credit"), purchaserName);
-        }
-
-        public async Task ProcessRankRewardsOnOrderAsync(string buyerUserId, decimal orderAmount)
-        {
-            var child = await _context.Users.FirstOrDefaultAsync(u => u.Id == buyerUserId);
-            if (child == null) throw new KeyNotFoundException("Buyer not found");
-
-            while (!string.IsNullOrEmpty(child.ParentId))
-            {
-                var parent = await _context.Users.FirstOrDefaultAsync(u => u.Id == child.ParentId);
-                if (parent == null) break;
-
-                var prog = await _context.Set<TeamSalesProgress>().FindAsync(parent.Id);
-                if (prog == null)
-                {
-                    prog = new TeamSalesProgress { UserId = parent.Id };
-                    _context.Add(prog);
-                }
-
-                if (child.Position == NodePosition.Left) prog.LeftTeamSales += orderAmount;
-                else prog.RightTeamSales += orderAmount;
-
-                var matched = Math.Min(prog.LeftTeamSales, prog.RightTeamSales);
-
-                var newlyHit = _rankRewards
-                    .Where(cfg => cfg.Milestone > prog.MatchedVolumeConsumed &&
-                                  cfg.Milestone <= matched)
-                    .OrderBy(cfg => cfg.Milestone)
-                    .ToList();
-
-                foreach (var cfg in newlyHit)
-                {
-                    decimal milestone = cfg.Milestone;
-                    decimal royalty = cfg.RoyaltyPct.HasValue ? Math.Round(milestone * cfg.RoyaltyPct.Value, 2) : 0m;
-                    decimal travel = cfg.TravelPct.HasValue ? Math.Round(milestone * cfg.TravelPct.Value, 2) : 0m;
-                    decimal car = cfg.CarPct.HasValue ? Math.Round(milestone * cfg.CarPct.Value, 2) : 0m;
-                    decimal house = cfg.HousePct.HasValue ? Math.Round(milestone * cfg.HousePct.Value, 2) : 0m;
-
-                    _context.Add(new RewardPayout
-                    {
-                        UserId = parent.Id,
-                        MilestoneAmount = milestone,
-                        RankLabel = cfg.Rank,
-                        RewardItem = cfg.RewardItem,
-                        RoyaltyAmount = royalty,
-                        TravelFundAmount = travel,
-                        CarFundAmount = car,
-                        HouseFundAmount = house,
-                        PayoutDate = DateTime.UtcNow
-                    });
-
-                    if (royalty > 0)
-                    {
-                        await AddCommissionTransactionAsync(parent, royalty, $"Rank Reward Royalty ({cfg.Rank} {milestone:N0})");
-                        await AddWalletTransactionAsync(parent, royalty, $"Rank Reward Royalty ({cfg.Rank} {milestone:N0})");
-                    }
-
-                    if (travel > 0) await AddFundContributionAsync(parent.Id, FundType.Travel, travel, cfg.Rank);
-                    if (car > 0) await AddFundContributionAsync(parent.Id, FundType.Car, car, cfg.Rank);
-                    if (house > 0) await AddFundContributionAsync(parent.Id, FundType.House, house, cfg.Rank);
-                }
-
-                if (newlyHit.Count > 0)
-                    prog.MatchedVolumeConsumed = matched;
-
-                await _context.SaveChangesAsync();
-
-                child = parent;
-            }
-        }
-
-        private Task AddFundContributionAsync(string userId, FundType type, decimal amount, string rankName)
-        {
-            if (amount <= 0m) return Task.CompletedTask;
-
-            _context.FundContributions.Add(new FundContribution
-            {
-                UserId = userId,
-                Type = type,
-                Amount = Math.Round(amount, 2, MidpointRounding.AwayFromZero),
-                ContributionDate = DateTime.UtcNow,
-                Remarks = $"Fund allocation for rank {rankName}"
-            });
-
-            return Task.CompletedTask;
-        }
-
-        /// <summary>
-        /// Distribute repurchase commission for a repurchase PV/amount.
-        /// level 0 = purchaser (10%), level 1 = direct upline (8%), etc.
-        /// </summary>
-        public async Task DistributeRepurchaseCommissionAsync(string purchaserUserId, decimal repurchaseBase)
-        {
-            if (repurchaseBase <= 0m) return;
-
-            var purchaser = await _userManager.FindByIdAsync(purchaserUserId)
-                           ?? throw new KeyNotFoundException("Purchaser not found");
-
-            await UpdateUserRank(purchaser);
-
-            var purchaserName = GetDisplayName(purchaser);
-
-            await PayRepurchaseAsync(purchaser, level: 0, baseAmount: repurchaseBase, purchaserName: purchaserName);
-
-            var current = purchaser;
-            for (int level = 1; level < RepurchasePercents.Length; level++)
-            {
-                if (string.IsNullOrEmpty(current.ParentId)) break;
-
-                var upline = await _userManager.FindByIdAsync(current.ParentId);
-                if (upline == null) break;
-
-                await UpdateUserRank(upline);
-
-                await PayRepurchaseAsync(upline, level, repurchaseBase, purchaserName);
-
-                current = upline;
-            }
-
-            await _context.SaveChangesAsync();
-        }
 
         private async Task AddWalletTransactionAsync(User user, decimal amount, string reason, string? triggeredByFullName = null)
         {
@@ -250,10 +64,10 @@ namespace backend.Repository
 
         private decimal GetDailyCapFor(User u)
         {
-            return _dailyCapByRank.TryGetValue(u.Rank, out var cap) ? cap : 0m;
+            return _dailyCapByRank.TryGetValue(u.Type, out var cap) ? cap : 0m;
         }
 
-        private async Task<Rank> GetRankFromOwnPurchasesAsync(string userId)
+        private async Task<UserType> GetRankFromOwnPurchasesAsync(string userId)
         {
             var ownPurchase = await _context.Orders
                 .Where(o => o.UserId == userId)
@@ -263,19 +77,202 @@ namespace backend.Repository
             {
                 if (ownPurchase >= min && ownPurchase <= max) return r;
             }
-            return Rank.None;
+            return UserType.None;
         }
 
-        private async Task AddCommissionTransactionAsync(User user, decimal amount, string reason, string? triggeredByFullName = null)
+        private static void AddCommissionTransactionAsync(User user, decimal amount, string reason, string? triggeredByFullName = null)
         {
             user.CommisionAmmount += amount;
-            await _commissionPayoutRepository.AddAsync(new CommissionPayout
+        }
+
+
+
+        // REPLACE your current UpdateUserRank with this:
+        private async Task UpdateUserRank(User user)
+        {
+            user.Type = await GetRankFromOwnPurchasesAsync(user.Id);
+        }
+
+        public async Task<List<User>> GetMyDownlineAsync(string userId)
+        {
+            var allUsers = await _context.Users.ToListAsync();
+            var downlines = new List<User>();
+
+            void Traverse(string parentId)
             {
-                UserId = user.Id,
-                PayoutDate = DateTime.UtcNow,
-                Amount = amount,
-                Remarks = $"{reason}{(triggeredByFullName != null ? $" (by {triggeredByFullName})" : "")}"
+                var children = allUsers.Where(u => u.ParentId == parentId).ToList();
+                foreach (var child in children)
+                {
+                    downlines.Add(child);
+                    Traverse(child.Id);
+                }
+            }
+
+            Traverse(userId);
+            return downlines;
+        }
+
+        public async Task<int> GetReferralCountAsync(string userId)
+        {
+            return await _context.Users.CountAsync(u => u.ReferalId == userId);
+        }
+
+        public async Task UpdateRanksFromBottomAsync()
+        {
+            var allUsers = await _context.Users.ToListAsync();
+            var userLookup = allUsers
+                .Where(u => !string.IsNullOrEmpty(u.ParentId))
+                .GroupBy(u => u.ParentId!)
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            var roots = allUsers.Where(u => string.IsNullOrEmpty(u.ParentId)).ToList();
+
+            foreach (var root in roots)
+            {
+                await UpdateRankDFS(root, userLookup);
+            }
+
+            await _context.SaveChangesAsync();
+        }
+
+        private async Task UpdateRankDFS(User user, Dictionary<string, List<User>> userLookup)
+        {
+            if (userLookup.TryGetValue(user.Id, out var children))
+            {
+                foreach (var child in children)
+                {
+                    await UpdateRankDFS(child, userLookup);
+                }
+            }
+            await UpdateUserRank(user);
+        }
+
+        public async Task<WalletStatementDto> GetWalletStatementAsync(string userId)
+        {
+            var user = await _context.Users.FindAsync(userId);
+            if (user == null) throw new KeyNotFoundException("User not found");
+
+            var transactions = new List<WalletTransactionDto>();
+
+            var commissions = await _context.CommissionPayouts
+                .Where(c => c.UserId == userId)
+                .Select(c => new WalletTransactionDto
+                {
+                    Date = c.PayoutDate,
+                    Type = "Commission",
+                    Amount = c.Amount,
+                    Remarks = c.Remarks
+                })
+                .ToListAsync();
+
+            transactions.AddRange(commissions);
+
+            var withdrawals = await _context.WithdrawalRequests
+                .Where(w => w.UserId == userId && w.Status == "Approved")
+                .Select(w => new WalletTransactionDto
+                {
+                    Date = w.ProcessedDate ?? w.RequestDate,
+                    Type = "Withdrawal",
+                    Amount = -w.Amount,
+                    Remarks = w.Remarks
+                })
+                .ToListAsync();
+            transactions.AddRange(withdrawals);
+
+            var sentTransfers = await _context.BalanceTransfers
+                .Where(t => t.SenderId == userId)
+                .Select(t => new WalletTransactionDto
+                {
+                    Date = t.TransferDate,
+                    Type = "Transfer Out",
+                    Amount = -t.Amount,
+                    Remarks = t.Remarks ?? $"To: {GetDisplayName(t.Receiver)}"
+                })
+                .ToListAsync();
+            transactions.AddRange(sentTransfers);
+
+            var receivedTransfers = await _context.BalanceTransfers
+                .Where(t => t.ReceiverId == userId)
+                .Select(t => new WalletTransactionDto
+                {
+                    Date = t.TransferDate,
+                    Type = "Transfer In",
+                    Amount = t.Amount,
+                    Remarks = t.Remarks ?? $"From: {GetDisplayName(t.Sender)}"
+                })
+                .ToListAsync();
+            transactions.AddRange(receivedTransfers);
+
+            transactions = transactions.OrderBy(t => t.Date).ToList();
+
+            decimal running = 0;
+            foreach (var t in transactions)
+            {
+                running += t.Amount;
+                t.BalanceAfter = running;
+            }
+
+            transactions.Insert(0, new WalletTransactionDto
+            {
+                Date = transactions.FirstOrDefault()?.Date ?? DateTime.UtcNow,
+                Type = "Initial Balance",
+                Amount = 0,
+                Remarks = "Wallet created",
+                BalanceAfter = 0
             });
+            return new WalletStatementDto
+            {
+                WalletBalance = running,
+                Transactions = transactions
+            };
+        }
+
+        public async Task<List<User>> GetDownlineAsync(string userId)
+        {
+            var allUsers = await _context.Users.ToListAsync();
+            var result = new List<User>();
+
+            void GetChildren(string parentId)
+            {
+                var children = allUsers.Where(u => u.ParentId == parentId).ToList();
+                foreach (var child in children)
+                {
+                    result.Add(child);
+                    GetChildren(child.Id);
+                }
+            }
+            GetChildren(userId);
+            return result;
+        }
+
+        public async Task UpdateProfilePictureUrlAsync(string userId, string? imageUrl)
+        {
+            var user = await _userManager.FindByIdAsync(userId)
+                       ?? throw new KeyNotFoundException("User not found.");
+
+            user.ProfilePictureUrl = imageUrl;
+
+            var result = await _userManager.UpdateAsync(user);
+            if (!result.Succeeded)
+            {
+                var errors = string.Join("; ", result.Errors.Select(e => $"{e.Code}: {e.Description}"));
+                throw new InvalidOperationException($"Failed to update profile picture URL. {errors}");
+            }
+        }
+
+        public async Task UpdateCitizenshipImageUrlAsync(string userId, string? imageUrl)
+        {
+            var user = await _userManager.FindByIdAsync(userId)
+                       ?? throw new KeyNotFoundException("User not found.");
+
+            user.CitizenshipImageUrl = imageUrl;
+
+            var result = await _userManager.UpdateAsync(user);
+            if (!result.Succeeded)
+            {
+                var errors = string.Join("; ", result.Errors.Select(e => $"{e.Code}: {e.Description}"));
+                throw new InvalidOperationException($"Failed to update citizenship image URL. {errors}");
+            }
         }
 
         public async Task<bool> CanBecomeDistributorAsync(string userId)
@@ -395,7 +392,7 @@ namespace backend.Repository
         {
             var user = await GetDistributorByIdAsync(userId) ?? throw new KeyNotFoundException("Invalid id");
             var name = GetDisplayName(user);
-            await AddCommissionTransactionAsync(user, commission, "Manual commission adjustment", name);
+            AddCommissionTransactionAsync(user, commission, "Manual commission adjustment", name);
             await _context.SaveChangesAsync();
         }
 
@@ -496,6 +493,227 @@ namespace backend.Repository
             return upline;
         }
 
+
+
+
+
+
+
+
+
+
+
+        /*======================================= Comission Related ===================================
+                                This section is for commission related operations
+         ======================================== Comission Related =================================== */
+
+
+
+
+
+
+
+
+
+        public enum RoyaltyFund { Royalty, Travel, Car, House }
+
+
+
+
+        private static readonly (decimal min, decimal max, UserType rank)[] _rankByPurchase =
+        {
+            (5000m,     15000m - 0.01m, UserType.Beginner), // 5,000 ≤ x < 15,000
+            (15000m,    30000m - 0.01m, UserType.Area),     // 15,000 ≤ x < 30,000
+            (30000m,    60000m - 0.01m, UserType.Zonal),    // 30,000 ≤ x < 60,000
+            (60000m,    100000m - 0.01m, UserType.Regional),// 60,000 ≤ x < 1,00,000
+            (100000m,   decimal.MaxValue, UserType.Nation), // ≥ 1,00,000
+        };
+
+        private static readonly Dictionary<UserType, decimal> _dailyCapByRank = new()
+        {
+            { UserType.Beginner, 12000m },
+            { UserType.Area,     24000m },
+            { UserType.Zonal,    36000m },
+            { UserType.Regional, 48000m },
+            { UserType.Nation,   60000m },
+            { UserType.None,         0m },
+        };
+        private static readonly (Rank Rank, decimal MatchedRequired)[] RankByMatchedTeamSales =
+        {
+    (Rank.GlobalDirector, 10_000_000m),
+    (Rank.Crown,           4_000_000m),
+    (Rank.Diamond,         2_000_000m),
+    (Rank.Pearl,           1_500_000m),
+    (Rank.Star,            1_000_000m),
+    (Rank.Gold,              700_000m),
+    (Rank.Silver,            500_000m),
+    (Rank.Rising,            300_000m),
+    (Rank.Executive,         100_000m),
+};
+
+
+        private static int GetAllowedRepurchaseLevelsForPurchaser(UserType purchaserRank) => purchaserRank switch
+        {
+            UserType.Beginner => 3,  // 0..2  => 10, 8, 6
+            UserType.Area => 4,  // 0..3  => 10, 8, 6, 5
+            UserType.Zonal => 5,  // 0..4  => 10, 8, 6, 5, 4
+            UserType.Regional => 7,  // 0..6  => 10, 8, 6, 5, 4, 3, 2
+            UserType.Nation => 11, // 0..10 => 10, 8, 6, 5, 4, 3, 2, 1, 1, 1, 1
+            _ => 0
+        };
+
+        private static readonly decimal[] RepurchasePercents = new decimal[]
+        {
+            0.10m, 0.08m, 0.06m, 0.05m, 0.04m, 0.03m, 0.02m, 0.01m, 0.01m, 0.01m, 0.01m
+        };
+        private static Rank GetRankForMatched(decimal matched)
+        {
+            foreach (var (rank, need) in RankByMatchedTeamSales)
+                if (matched >= need) return rank;
+
+            return Rank.None; // below Executive threshold
+        }
+
+        // Get the immediate child on a given side (Left/Right)
+        private async Task<User?> GetSideRootAsync(string userId, NodePosition side)
+        {
+            return await _context.Users
+                .FirstOrDefaultAsync(u => !u.IsDeleted && u.ParentId == userId && u.Position == side);
+        }
+
+        // Get ALL descendant user IDs starting from a given root user (BFS)
+        private async Task<List<string>> GetDescendantIdsAsync(string rootUserId, bool includeRoot = false)
+        {
+            var all = await _context.Users
+                    .Where(u => !u.IsDeleted)
+                    .Select(u => new { u.Id, u.ParentId })
+                    .ToListAsync();
+
+            var byParent = all
+                .Where(x => !string.IsNullOrEmpty(x.ParentId))
+                .GroupBy(x => x.ParentId!)
+                .ToDictionary(g => g.Key, g => g.Select(x => x.Id).ToList());
+
+            var result = new List<string>();
+            var q = new Queue<string>();
+
+            if (includeRoot) result.Add(rootUserId);
+            q.Enqueue(rootUserId);
+
+            while (q.Count > 0)
+            {
+                var curr = q.Dequeue();
+                if (byParent.TryGetValue(curr, out var kids))
+                {
+                    foreach (var kid in kids)
+                    {
+                        result.Add(kid);
+                        q.Enqueue(kid);
+                    }
+                }
+            }
+
+            return result;
+        }
+
+        // Sum team sales (Delivered orders) for a side of a user
+        // If you prefer PV: replace o.TotalAmount with sum of ProductPoint*Quantity.
+        private async Task<decimal> GetTeamSalesAsync(
+            string userId,
+            NodePosition side,
+            DateTime? from = null,
+            DateTime? to = null)
+        {
+            var sideRoot = await GetSideRootAsync(userId, side);
+            if (sideRoot == null) return 0m;
+
+            var teamIds = await GetDescendantIdsAsync(sideRoot.Id, includeRoot: true);
+            if (teamIds.Count == 0) return 0m;
+
+            var q = _context.Orders.AsQueryable();
+
+            q = q.Where(o => !o.IsDeleted &&
+                             o.Status == OrderStatus.Delivered &&
+                             teamIds.Contains(o.UserId));
+
+            if (from.HasValue) q = q.Where(o => o.OrderDate >= from.Value);
+            if (to.HasValue) q = q.Where(o => o.OrderDate <= to.Value);
+
+            return await q.SumAsync(o => (decimal?)o.TotalAmount) ?? 0m;
+        }
+
+
+        private async Task<bool> UpdateUserRankFromTeamSalesAsync(
+            User user, DateTime? from = null, DateTime? to = null)
+        {
+            var leftSales = await GetTeamSalesAsync(user.Id, NodePosition.Left, from, to);
+            var rightSales = await GetTeamSalesAsync(user.Id, NodePosition.Right, from, to);
+
+            var matched = Math.Min(leftSales, rightSales);
+            var newRank = GetRankForMatched(matched);
+
+            if (user.Rank != newRank)
+            {
+                user.Rank = newRank;
+                _context.Users.Update(user);
+                return true; // changed
+            }
+            return false; // unchanged
+        }
+
+        // Walk up the ancestry chain and update each ancestor's rank.
+        // Use this after a sale event for buyerUserId.
+        // Call this AFTER you confirm/record a sale (usually when order is Delivered)
+        public async Task UpdateRanksUpChainAsync(string buyerUserId, DateTime? from = null, DateTime? to = null)
+        {
+            var buyer = await _context.Users
+                .FirstOrDefaultAsync(u => !u.IsDeleted && u.Id == buyerUserId);
+            if (buyer == null) return;
+
+            // Collect parents (closest first)
+            var ancestors = new List<User>();
+            var cursor = buyer.ParentId;
+
+            while (!string.IsNullOrEmpty(cursor))
+            {
+                var p = await _context.Users
+                    .FirstOrDefaultAsync(u => !u.IsDeleted && u.Id == cursor);
+                if (p == null) break;
+
+                ancestors.Add(p);
+                cursor = p.ParentId;
+            }
+
+            if (ancestors.Count == 0) return;
+
+            var anyChanged = false;
+            foreach (var ancestor in ancestors)
+                anyChanged |= await UpdateUserRankFromTeamSalesAsync(ancestor, from, to);
+
+            if (anyChanged)
+                await _context.SaveChangesAsync();
+        }
+
+
+
+        private async Task PayRepurchaseAsync(User receiver, int level, decimal baseAmount, string purchaserName)
+        {
+            if (level < 0 || level >= RepurchasePercents.Length) return;
+
+            var pct = RepurchasePercents[level];
+            if (pct <= 0m) return;
+
+            var bonus = Math.Round(baseAmount * pct, 2, MidpointRounding.AwayFromZero);
+            if (bonus <= 0m) return;
+
+            var reason = level == 0
+                ? "Repurchase Commission (Self)"
+                : $"Repurchase Commission L{level} from {purchaserName}";
+
+            AddCommissionTransactionAsync(receiver, bonus, reason, purchaserName);
+            await AddWalletTransactionAsync(receiver, bonus, reason.Replace("Commission", "Wallet Credit"), purchaserName);
+        }
+
         public async Task ProcessCommissionOnSaleAsync(string userId, decimal saleAmount)
         {
             var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == userId);
@@ -505,31 +723,32 @@ namespace backend.Repository
             await ProcessIndirectSponsorBonus(user, saleAmount);
             await UpdateUserRank(user);
 
+
+
             var child = user;
             while (!string.IsNullOrEmpty(child.ParentId))
             {
                 var parent = await _context.Users.FirstOrDefaultAsync(u => u.Id == child.ParentId);
                 if (parent == null) break;
+                await UpdateUserRank(parent);
 
                 var buyerName = GetDisplayName(user);
 
                 if (child.Position == NodePosition.Left)
                 {
                     parent.LeftWallet += saleAmount;
-                    await AddWalletTransactionAsync(parent, saleAmount, "Left Wallet Increment", buyerName);
                 }
                 else if (child.Position == NodePosition.Right)
                 {
                     parent.RightWallet += saleAmount;
-                    await AddWalletTransactionAsync(parent, saleAmount, "Right Wallet Increment", buyerName);
                 }
 
                 await ProcessBinaryCommission(parent, buyerName);
-                await ProcessLeadershipBonus(parent);
-                await ProcessRankAchievementBonus(parent);
 
                 child = parent;
             }
+
+            await UpdateRanksUpChainAsync(userId);
 
             await _context.SaveChangesAsync();
         }
@@ -543,7 +762,7 @@ namespace backend.Repository
                 {
                     var bonus = saleAmount * 0.10m;
                     var buyerName = GetDisplayName(user);
-                    await AddCommissionTransactionAsync(referer, bonus, "Direct Sponsor Bonus", buyerName);
+                    AddCommissionTransactionAsync(referer, bonus, "Direct Sponsor Bonus", buyerName);
                     await AddWalletTransactionAsync(referer, bonus, "Direct Sponsor Bonus", buyerName);
                 }
             }
@@ -562,7 +781,7 @@ namespace backend.Repository
                 if (upline == null) break;
 
                 var bonus = saleAmount * percents[level - 1];
-                await AddCommissionTransactionAsync(upline, bonus, $"Level {level} Indirect Sponsor Bonus", buyerName);
+                AddCommissionTransactionAsync(upline, bonus, $"Level {level} Indirect Sponsor Bonus", buyerName);
                 await AddWalletTransactionAsync(upline, bonus, $"Level {level} Indirect Sponsor Bonus", buyerName);
 
                 current = upline;
@@ -581,11 +800,9 @@ namespace backend.Repository
             parent.LeftWallet -= pairs * 5000m;
             parent.RightWallet -= pairs * 5000m;
 
-            await AddCommissionTransactionAsync(parent, commission, "Binary Commission", triggeredByFullName);
+            AddCommissionTransactionAsync(parent, commission, "Binary Commission", triggeredByFullName);
             await AddWalletTransactionAsync(parent, commission, "Binary Wallet Credit", triggeredByFullName);
 
-            if (!string.IsNullOrEmpty(parent.ParentId))
-                await ProcessMatchingBonus(parent.ParentId, commission, triggeredByFullName);
 
             var cap = GetDailyCapFor(parent);
             if (cap > 0m)
@@ -599,283 +816,45 @@ namespace backend.Repository
             }
         }
 
-        private async Task ProcessMatchingBonus(string beneficiaryUserId, decimal binaryCommission, string triggeredByFullName)
+
+
+
+        public async Task DistributeRepurchaseCommissionAsync(string purchaserUserId, decimal repurchaseBase)
         {
-            var beneficiary = await _userManager.FindByIdAsync(beneficiaryUserId);
-            if (beneficiary == null || string.IsNullOrEmpty(beneficiary.ReferalId)) return;
+            if (repurchaseBase <= 0m) return;
 
-            var sponsor = await _userManager.FindByIdAsync(beneficiary.ReferalId);
-            if (sponsor == null) return;
+            var purchaser = await _userManager.FindByIdAsync(purchaserUserId)
+                           ?? throw new KeyNotFoundException("Purchaser not found");
 
-            decimal matchPercent = 0.10m;
-            decimal bonus = binaryCommission * matchPercent;
+            // Make sure purchaser's rank is current
+            await UpdateUserRank(purchaser);
 
-            await AddWalletTransactionAsync(sponsor, bonus, "Matching Bonus", triggeredByFullName);
-            await AddCommissionTransactionAsync(sponsor, bonus, "Matching Bonus", triggeredByFullName);
+            // Keep this value for commission depth, but DON'T early return
+            var allowedLevels = GetAllowedRepurchaseLevelsForPurchaser(purchaser.Type);
 
-            var matchPayout = new CommissionPayout
-            {
-                UserId = sponsor.Id,
-                PayoutDate = DateTime.UtcNow,
-                Amount = bonus,
-                Remarks = $"Matching bonus from {triggeredByFullName}'s Rs. {binaryCommission} binary income"
-            };
-            await _commissionPayoutRepository.AddAsync(matchPayout);
-        }
-
-        private async Task ProcessLeadershipBonus(User user)
-        {
-            if (!user.LeadershipBonusGiven && user.Rank >= Rank.Zonal)
-            {
-                var name = GetDisplayName(user);
-                await AddWalletTransactionAsync(user, 5000, "Leadership Bonus", name);
-                await AddCommissionTransactionAsync(user, 5000, "Leadership Bonus", name);
-                user.LeadershipBonusGiven = true;
-            }
-        }
-
-        private async Task ProcessRankAchievementBonus(User user)
-        {
-            if (user.RankBonusGiven) return;
-
-            var rankBonusMap = new Dictionary<Rank, decimal>
-            {
-                { Rank.Beginner, 5000 },
-                { Rank.Area, 10000 },
-                { Rank.Zonal, 20000 },
-                { Rank.Regional, 50000 },
-                { Rank.Nation, 50000 }
-            };
-
-            if (user.Rank > user.LastRankAwarded && rankBonusMap.ContainsKey(user.Rank))
-            {
-                var bonus = rankBonusMap[user.Rank];
-                var name = GetDisplayName(user);
-                await AddWalletTransactionAsync(user, bonus, "Rank Achievement Bonus", name);
-                await AddCommissionTransactionAsync(user, bonus, "Rank Achievement Bonus", name);
-                user.LastRankAwarded = user.Rank;
-            }
-        }
-
-        // REPLACE your current UpdateUserRank with this:
-        private async Task UpdateUserRank(User user)
-        {
-            user.Rank = await GetRankFromOwnPurchasesAsync(user.Id);
-        }
-
-        public async Task<List<User>> GetMyDownlineAsync(string userId)
-        {
-            var allUsers = await _context.Users.ToListAsync();
-            var downlines = new List<User>();
-
-            void Traverse(string parentId)
-            {
-                var children = allUsers.Where(u => u.ParentId == parentId).ToList();
-                foreach (var child in children)
-                {
-                    downlines.Add(child);
-                    Traverse(child.Id);
-                }
-            }
-
-            Traverse(userId);
-            return downlines;
-        }
-
-        public async Task<int> GetReferralCountAsync(string userId)
-        {
-            return await _context.Users.CountAsync(u => u.ReferalId == userId);
-        }
-
-        private async Task ProcessRepurchaseBonus(string purchaserUserId, decimal pvAmount)
-        {
-            var purchaser = await _userManager.FindByIdAsync(purchaserUserId);
-            if (purchaser == null || string.IsNullOrEmpty(purchaser.ReferalId)) return;
+            var purchaserName = GetDisplayName(purchaser);
 
             var current = purchaser;
-            var percentages = new[] { 0.10m, 0.05m, 0.03m, 0.02m, 0.01m };
-            var buyerName = GetDisplayName(purchaser);
-
-            for (int level = 0; level < percentages.Length; level++)
+            for (int level = 0; level < RepurchasePercents.Length; level++)
             {
-                if (string.IsNullOrEmpty(current.ReferalId)) break;
-
-                var upline = await _userManager.FindByIdAsync(current.ReferalId);
-                if (upline == null) break;
-
-                decimal bonus = pvAmount * percentages[level];
-                await AddWalletTransactionAsync(upline, bonus, $"Level {level + 1} Repurchase Bonus", buyerName);
-                await AddCommissionTransactionAsync(upline, bonus, $"Level {level + 1} Repurchase Bonus", buyerName);
-
-                await _commissionPayoutRepository.AddAsync(new CommissionPayout
+                // Only pay if this node is eligible for this level (within their allowed depth)
+                if (level < allowedLevels)
                 {
-                    UserId = upline.Id,
-                    PayoutDate = DateTime.UtcNow,
-                    Amount = bonus,
-                    Remarks = $"Level {level + 1} Repurchase bonus from {buyerName}'s repurchase"
-                });
+                    await PayRepurchaseAsync(current, level, repurchaseBase, purchaserName);
+                }
 
-                current = upline;
-            }
-        }
+                // Move up the binary PARENT chain
+                if (string.IsNullOrEmpty(current.ParentId)) break;
 
-        public async Task UpdateRanksFromBottomAsync()
-        {
-            var allUsers = await _context.Users.ToListAsync();
-            var userLookup = allUsers
-                .Where(u => !string.IsNullOrEmpty(u.ParentId))
-                .GroupBy(u => u.ParentId!)
-                .ToDictionary(g => g.Key, g => g.ToList());
+                var next = await _userManager.FindByIdAsync(current.ParentId);
+                if (next == null) break;
 
-            var roots = allUsers.Where(u => string.IsNullOrEmpty(u.ParentId)).ToList();
-
-            foreach (var root in roots)
-            {
-                await UpdateRankDFS(root, userLookup);
+                current = next;
             }
 
             await _context.SaveChangesAsync();
         }
 
-        private async Task UpdateRankDFS(User user, Dictionary<string, List<User>> userLookup)
-        {
-            if (userLookup.TryGetValue(user.Id, out var children))
-            {
-                foreach (var child in children)
-                {
-                    await UpdateRankDFS(child, userLookup);
-                }
-            }
-            await UpdateUserRank(user);
-        }
-
-        public async Task<WalletStatementDto> GetWalletStatementAsync(string userId)
-        {
-            var user = await _context.Users.FindAsync(userId);
-            if (user == null) throw new KeyNotFoundException("User not found");
-
-            var transactions = new List<WalletTransactionDto>();
-
-            var commissions = await _context.CommissionPayouts
-                .Where(c => c.UserId == userId)
-                .Select(c => new WalletTransactionDto
-                {
-                    Date = c.PayoutDate,
-                    Type = "Commission",
-                    Amount = c.Amount,
-                    Remarks = c.Remarks
-                })
-                .ToListAsync();
-
-            transactions.AddRange(commissions);
-
-            var withdrawals = await _context.WithdrawalRequests
-                .Where(w => w.UserId == userId && w.Status == "Approved")
-                .Select(w => new WalletTransactionDto
-                {
-                    Date = w.ProcessedDate ?? w.RequestDate,
-                    Type = "Withdrawal",
-                    Amount = -w.Amount,
-                    Remarks = w.Remarks
-                })
-                .ToListAsync();
-            transactions.AddRange(withdrawals);
-
-            var sentTransfers = await _context.BalanceTransfers
-                .Where(t => t.SenderId == userId)
-                .Select(t => new WalletTransactionDto
-                {
-                    Date = t.TransferDate,
-                    Type = "Transfer Out",
-                    Amount = -t.Amount,
-                    Remarks = t.Remarks ?? $"To: {GetDisplayName(t.Receiver)}"
-                })
-                .ToListAsync();
-            transactions.AddRange(sentTransfers);
-
-            var receivedTransfers = await _context.BalanceTransfers
-                .Where(t => t.ReceiverId == userId)
-                .Select(t => new WalletTransactionDto
-                {
-                    Date = t.TransferDate,
-                    Type = "Transfer In",
-                    Amount = t.Amount,
-                    Remarks = t.Remarks ?? $"From: {GetDisplayName(t.Sender)}"
-                })
-                .ToListAsync();
-            transactions.AddRange(receivedTransfers);
-
-            transactions = transactions.OrderBy(t => t.Date).ToList();
-
-            decimal running = 0;
-            foreach (var t in transactions)
-            {
-                running += t.Amount;
-                t.BalanceAfter = running;
-            }
-
-            transactions.Insert(0, new WalletTransactionDto
-            {
-                Date = transactions.FirstOrDefault()?.Date ?? DateTime.UtcNow,
-                Type = "Initial Balance",
-                Amount = 0,
-                Remarks = "Wallet created",
-                BalanceAfter = 0
-            });
-
-            return new WalletStatementDto
-            {
-                WalletBalance = running,
-                Transactions = transactions
-            };
-        }
-
-        public async Task<List<User>> GetDownlineAsync(string userId)
-        {
-            var allUsers = await _context.Users.ToListAsync();
-            var result = new List<User>();
-
-            void GetChildren(string parentId)
-            {
-                var children = allUsers.Where(u => u.ParentId == parentId).ToList();
-                foreach (var child in children)
-                {
-                    result.Add(child);
-                    GetChildren(child.Id);
-                }
-            }
-            GetChildren(userId);
-            return result;
-        }
-
-        public async Task UpdateProfilePictureUrlAsync(string userId, string? imageUrl)
-        {
-            var user = await _userManager.FindByIdAsync(userId)
-                       ?? throw new KeyNotFoundException("User not found.");
-
-            user.ProfilePictureUrl = imageUrl;
-
-            var result = await _userManager.UpdateAsync(user);
-            if (!result.Succeeded)
-            {
-                var errors = string.Join("; ", result.Errors.Select(e => $"{e.Code}: {e.Description}"));
-                throw new InvalidOperationException($"Failed to update profile picture URL. {errors}");
-            }
-        }
-
-        public async Task UpdateCitizenshipImageUrlAsync(string userId, string? imageUrl)
-        {
-            var user = await _userManager.FindByIdAsync(userId)
-                       ?? throw new KeyNotFoundException("User not found.");
-
-            user.CitizenshipImageUrl = imageUrl;
-
-            var result = await _userManager.UpdateAsync(user);
-            if (!result.Succeeded)
-            {
-                var errors = string.Join("; ", result.Errors.Select(e => $"{e.Code}: {e.Description}"));
-                throw new InvalidOperationException($"Failed to update citizenship image URL. {errors}");
-            }
-        }
     }
 }
+

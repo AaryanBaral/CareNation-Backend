@@ -1,6 +1,5 @@
 // Logging/ImpersonationAuditFilter.cs
 using Microsoft.AspNetCore.Mvc.Filters;
-using Microsoft.Extensions.Logging;
 using System.Security.Claims;
 
 namespace backend.Logging

@@ -32,7 +32,8 @@ namespace backend.Repository
             var product = await _context.Products.FindAsync(id);
             if (product != null)
             {
-                _context.Products.Remove(product);
+                product.IsDeleted = true; // Mark as deleted instead of removing
+                _context.Products.Update(product);
                 await _context.SaveChangesAsync();
             }
         }
@@ -51,22 +52,22 @@ namespace backend.Repository
                 .ToListAsync();
         }
         public async Task<List<Product>> SearchProductsAsync(string? name, decimal? minPrice, decimal? maxPrice, int? categoryId)
-            {
-                var query = _context.Products.AsQueryable();
+        {
+            var query = _context.Products.AsQueryable();
 
-                if (!string.IsNullOrWhiteSpace(name))
-                    query = query.Where(p => p.Title.ToLower().Contains(name.ToLower()));
+            if (!string.IsNullOrWhiteSpace(name))
+                query = query.Where(p => p.Title.ToLower().Contains(name.ToLower()));
 
-                if (minPrice.HasValue)
-                    query = query.Where(p => p.RetailPrice >= minPrice.Value);
+            if (minPrice.HasValue)
+                query = query.Where(p => p.RetailPrice >= minPrice.Value);
 
-                if (maxPrice.HasValue)
-                    query = query.Where(p => p.RetailPrice <= maxPrice.Value);
+            if (maxPrice.HasValue)
+                query = query.Where(p => p.RetailPrice <= maxPrice.Value);
 
-                if (categoryId.HasValue)
-                    query = query.Where(p => p.CategoryId == categoryId.Value);
+            if (categoryId.HasValue)
+                query = query.Where(p => p.CategoryId == categoryId.Value);
 
-                return await query.ToListAsync();
-            }
+            return await query.ToListAsync();
+        }
     }
 }

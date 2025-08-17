@@ -88,7 +88,7 @@ namespace backend.Repository
             var order = await GetOrderByIdAsync(orderId);
             if (order == null || order.Status != OrderStatus.Pending) return false;
 
-            order.Status = OrderStatus.Canceled;
+            order.Status = OrderStatus.Cancelled;
             _context.Orders.Update(order);
             return await _context.SaveChangesAsync() > 0;
         }

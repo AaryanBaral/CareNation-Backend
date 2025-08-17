@@ -8,6 +8,7 @@ public class FundContribution
     public decimal Amount { get; set; }
     public DateTime ContributionDate { get; set; }
     public string? Remarks { get; set; }
+        public bool IsDeleted { get; set; }
 
     // Navigation
     public User User { get; set; } = default!;

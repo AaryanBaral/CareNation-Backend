@@ -15,6 +15,7 @@ namespace backend.Models
 
         [MaxLength(100)]
         public string? ContactPerson { get; set; }
+            public bool IsDeleted { get; set; }
 
         [MaxLength(20)]
         public string? Phone { get; set; }

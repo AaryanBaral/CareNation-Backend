@@ -10,4 +10,5 @@ public class WithdrawalRequest
     public string Status { get; set; } = "Pending"; // Pending, Approved, Rejected
     public DateTime? ProcessedDate { get; set; }
     public string? Remarks { get; set; }
+        public bool IsDeleted { get; set; }
 }
