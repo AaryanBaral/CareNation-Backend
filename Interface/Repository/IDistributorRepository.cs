@@ -29,6 +29,11 @@ public interface IDistributorRepository
         Task<List<User>> GetDownlineAsync(string userId);
         Task UpdateProfilePictureUrlAsync(string userId, string? imageUrl);
         Task UpdateCitizenshipImageUrlAsync(string userId, string? imageUrl);
+        Task UpdateRanksUpChainAsync(string buyerUserId, DateTime? from = null, DateTime? to = null);
+        Task DistributeRepurchasePoints_FundsAndCompanyAsync(decimal repurchasePvBase, string? contextNote = null);
+        Task ProcessRepurchaseAsync(string purchaserUserId, decimal repurchasePvBase);
+
+
 
 
 }

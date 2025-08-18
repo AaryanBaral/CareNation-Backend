@@ -130,7 +130,7 @@ public class OrderService : IOrderService
             var totalPV = CalculateOrderPV(order);
             if (totalPV > 0)
             {
-                await _distributorRepository.DistributeRepurchaseCommissionAsync(userId, totalPV);
+                await _distributorRepository.ProcessRepurchaseAsync(userId, totalPV);
             }
         }
 
@@ -143,7 +143,7 @@ public class OrderService : IOrderService
     public async Task<List<OrderReadDto>> GetAllOrdersAsync()
     {
         var list = await _orderRepo.GetAllOrdersAsync();
-        return list.Select(o => o.ToDto()).ToList();
+        return [.. list.Select(o => o.ToDto())];
     }
 
     public Task<int> GetTotalOrdersCountAsync() => _orderRepo.GetTotalOrdersCountAsync();

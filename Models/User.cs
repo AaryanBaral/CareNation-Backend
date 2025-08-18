@@ -33,6 +33,7 @@ namespace backend.Models
         GlobalDirector
     }
 
+
     public class User : IdentityUser
     {
         // MLM Hierarchy
@@ -110,6 +111,20 @@ namespace backend.Models
         public bool LeadershipBonusGiven { get; set; } = false;
         public bool RankBonusGiven { get; set; } = false;
         public UserType LastRankAwarded { get; set; } = UserType.None;
+
+        public decimal RepurchasePoints { get; set; }
+
+        // Fund pools (from the remaining 58% → 50% of base)
+        public decimal RoyaltyPoints { get; set; }
+        public decimal TravelPoints { get; set; }
+        public decimal CarPoints { get; set; }
+        public decimal HousePoints { get; set; }
+
+        // For company account only (8% share + unallocated fund slices)
+        public decimal CompanyPoints { get; set; }
+
+        // Flag a special user as the company account
+        public bool IsCompanyAccount { get; set; }
 
         // Metadata
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

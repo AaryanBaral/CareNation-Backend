@@ -24,6 +24,7 @@ namespace backend.Data
             public DbSet<FundContribution> FundContributions { get; set; }
             public DbSet<TeamSalesProgress> TeamSalesProgresses { get; set; }
             public DbSet<RewardPayout> RewardPayouts { get; set; }
+            public DbSet<PointsTransaction> PointsTransactions { get; set; } = default!;
 
             protected override void OnModelCreating(ModelBuilder modelBuilder)
             {

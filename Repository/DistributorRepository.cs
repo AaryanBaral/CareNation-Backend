@@ -515,9 +515,6 @@ namespace backend.Repository
 
 
 
-        public enum RoyaltyFund { Royalty, Travel, Car, House }
-
-
 
 
         private static readonly (decimal min, decimal max, UserType rank)[] _rankByPurchase =
@@ -579,6 +576,45 @@ namespace backend.Repository
         {
             return await _context.Users
                 .FirstOrDefaultAsync(u => !u.IsDeleted && u.ParentId == userId && u.Position == side);
+        }
+
+        // -------------------- Common helpers --------------------
+        private static decimal Round2(decimal d) => Math.Round(d, 2, MidpointRounding.AwayFromZero);
+
+        // Ledger + bucket updater
+        private async Task AddPointsAsync(User user, decimal points, PointsType type, string note, string? sourceUserId = null, int? level = null)
+        {
+            if (points <= 0m) return;
+
+            _context.PointsTransactions.Add(new PointsTransaction
+            {
+                UserId = user.Id,
+                Type = type,
+                Points = points,
+                Note = note,
+                SourceUserId = sourceUserId,
+                Level = level
+            });
+
+            switch (type)
+            {
+                case PointsType.RepurchaseLevel: user.RepurchasePoints += points; break;
+                case PointsType.RoyaltyFund: user.RoyaltyPoints += points; break;
+                case PointsType.TravelFund: user.TravelPoints += points; break;
+                case PointsType.CarFund: user.CarPoints += points; break;
+                case PointsType.HouseFund: user.HousePoints += points; break;
+                case PointsType.CompanyShare: user.CompanyPoints += points; break;
+            }
+
+            _context.Users.Update(user);
+            await Task.CompletedTask;
+        }
+
+        private async Task<User> GetCompanyAccountAsync()
+        {
+            var company = await _context.Users.FirstOrDefaultAsync(u => !u.IsDeleted && u.IsCompanyAccount);
+            if (company == null) throw new InvalidOperationException("Company account not found.");
+            return company;
         }
 
         // Get ALL descendant user IDs starting from a given root user (BFS)
@@ -643,6 +679,174 @@ namespace backend.Repository
         }
 
 
+
+
+        // -------------------- FUNDS (POINTS) — remaining 58% => 8% company + 50% funds --------------------
+        private static class FundWeights
+        {
+            // Royalty (20% pool): Silver 16%; Gold, Star, Pearl, Diamond, Crown, GlobalDirector = 14% each
+            public static readonly Dictionary<Rank, decimal> Royalty = new()
+        {
+            { Rank.Silver,         0.16m },
+            { Rank.Gold,           0.14m },
+            { Rank.Star,           0.14m },
+            { Rank.Pearl,          0.14m },
+            { Rank.Diamond,        0.14m },
+            { Rank.Crown,          0.14m },
+            { Rank.GlobalDirector, 0.14m },
+        };
+
+            // Travel (10% pool): Gold 20; Star 19; Pearl 18; Diamond 17; Crown 16; GlobalDirector 10
+            public static readonly Dictionary<Rank, decimal> Travel = new()
+        {
+            { Rank.Gold,           0.20m },
+            { Rank.Star,           0.19m },
+            { Rank.Pearl,          0.18m },
+            { Rank.Diamond,        0.17m },
+            { Rank.Crown,          0.16m },
+            { Rank.GlobalDirector, 0.10m },
+        };
+
+            // Car (10% pool): 20% each for Star..GlobalDirector
+            public static readonly Dictionary<Rank, decimal> Car = new()
+        {
+            { Rank.Star,           0.20m },
+            { Rank.Pearl,          0.20m },
+            { Rank.Diamond,        0.20m },
+            { Rank.Crown,          0.20m },
+            { Rank.GlobalDirector, 0.20m },
+        };
+
+            // House (10% pool): adjust as per your exact sheet; even split shown
+            public static readonly Dictionary<Rank, decimal> House = new()
+        {
+            { Rank.Star,           0.20m },
+            { Rank.Pearl,          0.20m },
+            { Rank.Diamond,        0.20m },
+            { Rank.Crown,          0.20m },
+            { Rank.GlobalDirector, 0.20m },
+        };
+        }
+
+        /// <summary>
+        /// Splits a fund PV pool across ranks by weights, then equally among users in each rank.
+        /// Unallocated (no users) goes to company points.
+        /// Rounding is handled so total equals the pool.
+        /// </summary>
+        private async Task DistributeFundPointsAsync(
+            PointsType fundType,
+            string fundLabel,
+            decimal fundPvPool,
+            IReadOnlyDictionary<Rank, decimal> weights,
+            string note)
+        {
+            if (fundPvPool <= 0) return;
+
+            var company = await GetCompanyAccountAsync();
+
+            foreach (var (rank, fraction) in weights)
+            {
+                if (fraction <= 0) continue;
+
+                var rankBucket = Round2(fundPvPool * fraction);
+                if (rankBucket <= 0) continue;
+
+                var users = await _context.Users
+                    .Where(u => !u.IsDeleted && u.Rank == rank)
+                    .Select(u => u) // fetch entities to update points
+                    .ToListAsync();
+
+                if (users.Count == 0)
+                {
+                    await AddPointsAsync(company, rankBucket, fundType, $"{fundLabel} (Unallocated {rank})", null);
+                    continue;
+                }
+
+                // equal split with remainder distribution to keep totals exact
+                var baseShare = Math.Floor((rankBucket / users.Count) * 100m) / 100m; // 2dp floor
+                var totalBase = baseShare * users.Count;
+                var remainder = Round2(rankBucket - totalBase); // up to 0.99
+
+                // give +0.01 to first N users until remainder is exhausted
+                var cents = (int)Math.Round(remainder * 100m, 0, MidpointRounding.AwayFromZero);
+
+                for (int i = 0; i < users.Count; i++)
+                {
+                    var bonus = baseShare + (i < cents ? 0.01m : 0m);
+                    if (bonus <= 0) continue;
+                    await AddPointsAsync(users[i], bonus, fundType, $"{fundLabel} - {rank}", null);
+                }
+            }
+        }
+        private static void ValidateFundWeights()
+        {
+            static void Check(string name, Dictionary<Rank, decimal> w)
+            {
+                var sum = w.Values.Sum();
+                if (Math.Abs(sum - 1.00m) > 0.0001m)
+                    throw new InvalidOperationException($"{name} weights must sum to 1.00 but are {sum}");
+            }
+
+            Check("Royalty", FundWeights.Royalty);
+            Check("Travel", FundWeights.Travel);
+            Check("Car", FundWeights.Car);
+            Check("House", FundWeights.House);
+        }
+
+
+
+        /// <summary>
+        /// After paying the 42% level chain, call this with the SAME PV base to split 58% into:
+        /// 8% company + (20% Royalty, 10% Travel, 10% Car, 10% House) — all points.
+        /// </summary>
+        public async Task DistributeRepurchasePoints_FundsAndCompanyAsync(decimal repurchasePvBase, string? contextNote = null)
+        {
+            if (repurchasePvBase <= 0) return;
+
+            ValidateFundWeights();
+
+            var note = string.IsNullOrWhiteSpace(contextNote) ? "Repurchase PV Pools" : contextNote!.Trim();
+            var company = await GetCompanyAccountAsync();
+
+            // 8% company share (points)
+            var companyPv = Round2(repurchasePvBase * 0.08m);
+            if (companyPv > 0)
+                await AddPointsAsync(company, companyPv, PointsType.CompanyShare, "Company Share 8% (PV)", null);
+
+            // 50% into four funds (of the original PV base)
+            var royaltyPool = Round2(repurchasePvBase * 0.20m);
+            var travelPool = Round2(repurchasePvBase * 0.10m);
+            var carPool = Round2(repurchasePvBase * 0.10m);
+            var housePool = Round2(repurchasePvBase * 0.10m);
+
+            await DistributeFundPointsAsync(PointsType.RoyaltyFund, "Royalty Fund (20%)", royaltyPool, FundWeights.Royalty, note);
+            await DistributeFundPointsAsync(PointsType.TravelFund, "Travel Fund (10%)", travelPool, FundWeights.Travel, note);
+            await DistributeFundPointsAsync(PointsType.CarFund, "Car Fund (10%)", carPool, FundWeights.Car, note);
+            await DistributeFundPointsAsync(PointsType.HouseFund, "House Fund (10%)", housePool, FundWeights.House, note);
+
+            await _context.SaveChangesAsync();
+        }
+
+
+
+
+        // -------------------- Convenience entrypoint for a repurchase --------------------
+        /// <summary>
+        /// Call this when a repurchase (PV) is confirmed.
+        /// </summary>
+        public async Task ProcessRepurchaseAsync(string purchaserUserId, decimal repurchasePvBase)
+        {
+            // 1) 42% chain points
+            await DistributeRepurchaseCommissionAsync(purchaserUserId, repurchasePvBase);
+
+            // 2) remaining 58% → 8% company + 50% funds (all points)
+            await DistributeRepurchasePoints_FundsAndCompanyAsync(repurchasePvBase, $"Repurchase PV by {purchaserUserId}");
+
+            // 3) (optional) bump ranks up the chain if your ranks depend on PV
+            await UpdateRanksUpChainAsync(purchaserUserId);
+        }
+
+
         private async Task<bool> UpdateUserRankFromTeamSalesAsync(
             User user, DateTime? from = null, DateTime? to = null)
         {
@@ -703,16 +907,25 @@ namespace backend.Repository
             var pct = RepurchasePercents[level];
             if (pct <= 0m) return;
 
-            var bonus = Math.Round(baseAmount * pct, 2, MidpointRounding.AwayFromZero);
-            if (bonus <= 0m) return;
+            // PV points (not cash)
+            var points = Math.Round(baseAmount * pct, 2, MidpointRounding.AwayFromZero);
+            if (points <= 0m) return;
 
-            var reason = level == 0
-                ? "Repurchase Commission (Self)"
-                : $"Repurchase Commission L{level} from {purchaserName}";
+            var note = level == 0
+                ? $"Repurchase PV (Self) from {purchaserName}"
+                : $"Repurchase PV L{level} from {purchaserName}";
 
-            AddCommissionTransactionAsync(receiver, bonus, reason, purchaserName);
-            await AddWalletTransactionAsync(receiver, bonus, reason.Replace("Commission", "Wallet Credit"), purchaserName);
+            // ✅ Store in CompanyPoints for this user (no wallet/commission records)
+            await AddPointsAsync(
+                user: receiver,
+                points: points,
+                type: PointsType.CompanyShare,  // puts it in user.CompanyPoints
+                note: note,
+                sourceUserId: null,
+                level: level
+            );
         }
+
 
         public async Task ProcessCommissionOnSaleAsync(string userId, decimal saleAmount)
         {
@@ -829,16 +1042,15 @@ namespace backend.Repository
             // Make sure purchaser's rank is current
             await UpdateUserRank(purchaser);
 
-            // Keep this value for commission depth, but DON'T early return
-            var allowedLevels = GetAllowedRepurchaseLevelsForPurchaser(purchaser.Type);
-
             var purchaserName = GetDisplayName(purchaser);
 
             var current = purchaser;
             for (int level = 0; level < RepurchasePercents.Length; level++)
             {
-                // Only pay if this node is eligible for this level (within their allowed depth)
-                if (level < allowedLevels)
+                // check eligibility of the current receiver (NOT purchaser)
+                var allowedLevelsForCurrent = GetAllowedRepurchaseLevelsForPurchaser(current.Type);
+
+                if (level < allowedLevelsForCurrent)
                 {
                     await PayRepurchaseAsync(current, level, repurchaseBase, purchaserName);
                 }
@@ -854,6 +1066,8 @@ namespace backend.Repository
 
             await _context.SaveChangesAsync();
         }
+
+
 
     }
 }
